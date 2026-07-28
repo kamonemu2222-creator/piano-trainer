@@ -45,6 +45,10 @@
   .bkey{position:absolute; top:0; width:26px; height:95px; background:#181a26; border:1px solid #000;
         border-radius:0 0 5px 5px; z-index:2;}
   .bkey:active{background:var(--accent);}
+  .kbscroll{-webkit-appearance:none;appearance:none;display:block;width:100%;max-width:460px;height:12px;border-radius:7px;background:#2a2d44;margin:12px auto 2px;}
+  .kbscroll::-webkit-slider-thumb{-webkit-appearance:none;width:52px;height:30px;border-radius:9px;background:var(--accent);border:2px solid #0d0e16;}
+  .kbscroll::-moz-range-thumb{width:52px;height:30px;border-radius:9px;background:var(--accent);border:2px solid #0d0e16;}
+  .kbcap{font-size:11px;color:var(--muted);}
   .listen{font-size:14px; color:var(--muted); min-height:24px;}
   .detected{font-size:26px; font-weight:800; color:var(--accent);}
   .hidden{display:none;}
@@ -101,7 +105,11 @@
     <button data-note="11">シ<small>B</small></button>
   </div>
 
-  <div id="pianoPanel" class="pianoWrap hidden"><div class="piano" id="piano"></div></div>
+  <div id="pianoPanel" class="hidden">
+    <div class="pianoWrap" id="pianoScroll"><div class="piano" id="piano"></div></div>
+    <div class="kbcap">← 鍵盤を左右にスクロール →</div>
+    <input type="range" id="kbScroll" class="kbscroll" min="0" max="100" value="0" aria-label="鍵盤をスクロール">
+  </div>
 
   <div id="micPanel" class="hidden">
     <div class="listen" id="listenMsg">スタートでマイク許可 → 表示の音符を鍵盤で弾いてください。</div>
@@ -250,11 +258,22 @@ function buildPiano(){
       b.style.left=(idx*W+W-BW/2)+"px"; b.dataset.note=m+1; piano.appendChild(b);
     }
   });
+  syncKb();
 }
 el("piano").addEventListener("click",e=>{
   const k=e.target.closest(".wkey,.bkey"); if(!k||!running||method!=="piano") return;
   if(parseInt(k.dataset.note,10)===target.midi) correct(); else wrong();
 });
+/* 鍵盤スクロール用スライダー（鍵に触れず左右移動） */
+const pianoScroll=el("pianoScroll"), kbScroll=el("kbScroll");
+function syncKb(){ const max=pianoScroll.scrollWidth-pianoScroll.clientWidth;
+  if(max<=2){ kbScroll.style.display="none"; document.querySelector(".kbcap").style.display="none"; }
+  else { kbScroll.style.display=""; document.querySelector(".kbcap").style.display="";
+    kbScroll.value = pianoScroll.scrollLeft/max*100; } }
+kbScroll.addEventListener("input",()=>{ const max=pianoScroll.scrollWidth-pianoScroll.clientWidth;
+  pianoScroll.scrollLeft = kbScroll.value/100*max; });
+pianoScroll.addEventListener("scroll",syncKb);
+window.addEventListener("resize",syncKb);
 
 /* ---------- マイク（自己相関ピッチ検出） ---------- */
 let audioCtx=null,analyser=null,micStream=null,rafId=null,buf=null,lastMidi=null,stable=0;
