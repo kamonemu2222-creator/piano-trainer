@@ -142,6 +142,8 @@ const RANGE_MIDI={
   bass:  {narrow:[48,60], wide:[36,60]},   // C3–C4 / C2–C4
 };
 function naturals(lo,hi){ const a=[]; for(let m=lo;m<=hi;m++) if(isNatural(m)) a.push(m); return a; }
+// 画面の鍵盤の左端（記号ごと）。null=出題プールに合わせる。ヘ音・混合は C1(=MIDI 24) から
+const KB_LOW_MIDI={treble:null, bass:24, both:24};
 
 /* ---------- 五線描画 ---------- */
 const NS="http://www.w3.org/2000/svg", staff=document.getElementById("staff");
@@ -242,8 +244,11 @@ el("namePanel").addEventListener("click",e=>{
 
 /* ---------- 画面の鍵盤 ---------- */
 function buildPiano(){
+  if(!combined.length) return;
   const min=Math.min(...combined.map(o=>o.midi)), max=Math.max(...combined.map(o=>o.midi));
-  const lowC=Math.floor(min/12)*12, highC=Math.ceil((max+1)/12)*12;
+  const forced=KB_LOW_MIDI[clefMode];
+  const lowC=(forced!=null && forced<min) ? forced : Math.floor(min/12)*12;
+  const highC=Math.ceil((max+1)/12)*12;
   const whites=[]; for(let m=lowC;m<=highC;m++) if(isNatural(m)) whites.push(m);
   const W=42, BW=26, piano=el("piano"); piano.innerHTML="";
   piano.style.width=(whites.length*W)+"px";
@@ -258,6 +263,9 @@ function buildPiano(){
       b.style.left=(idx*W+W-BW/2)+"px"; b.dataset.note=m+1; piano.appendChild(b);
     }
   });
+  // 鍵盤が出題範囲より左に伸びている場合、出題される一番低い音が見えるところまで寄せる
+  const first=piano.querySelector('[data-note="'+min+'"]');
+  if(first) pianoScroll.scrollLeft=Math.max(0, first.offsetLeft-W);
   syncKb();
 }
 el("piano").addEventListener("click",e=>{
@@ -331,14 +339,16 @@ function segHandler(segId,setter){
     setter(b.dataset); if(running) endGame();
   });
 }
+/* 設定を変えたら、スタート前でも鍵盤を作り直して今の設定を反映する */
+function refreshPiano(){ if(method!=="piano") return; buildPools(); buildPiano(); }
 segHandler("methodSeg",d=>{ method=d.m;
   el("namePanel").classList.toggle("hidden",method!=="name");
   el("pianoPanel").classList.toggle("hidden",method!=="piano");
   el("micPanel").classList.toggle("hidden",method!=="mic");
-  updateHint();
+  updateHint(); refreshPiano();
 });
-segHandler("clefSeg",d=>{ clefMode=d.c; });
-segHandler("rangeSeg",d=>{ rangeMode=d.r; });
+segHandler("clefSeg",d=>{ clefMode=d.c; refreshPiano(); });
+segHandler("rangeSeg",d=>{ rangeMode=d.r; refreshPiano(); });
 function updateHint(){
   const map={
     name:"音名ボタン：出た音符が「ドレミ…」のどれかをタップ。オクターブは不問。速読ドリル向き。",
