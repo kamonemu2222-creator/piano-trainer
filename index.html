@@ -417,12 +417,11 @@ function buildSong(){
   const clef = clefMode==="bass" ? "bass" : "treble";   // 混合は曲では意味がないのでト音にする
   const notes=parseNotes(song.notes);
   const base = clef==="bass" ? -24 : 0;                 // ヘ音記号では2オクターブ下げて読む
-  let shift=base;
-  if(octVary){                                          // 覚えてしまわないよう読む位置を変える
-    const ok=[-12,0,12].map(o=>base+o).filter(sh=>fitsStaff(notes,clef,sh));
-    if(ok.length) shift=ok[Math.floor(Math.random()*ok.length)];
-  }
-  if(!fitsStaff(notes,clef,shift)) shift=base;
+  /* 五線に収まる移調先だけを候補にする。基本の位置に収まらない曲（音域が低すぎる等）は
+     1オクターブずつずらして探す。候補が複数あるとき、octVary ならその中から毎回選び直す。 */
+  const cands=[base,base+12,base-12,base+24,base-24].filter(sh=>fitsStaff(notes,clef,sh));
+  let shift = cands.length ? cands[0] : base;
+  if(octVary && cands.length>1) shift=cands[Math.floor(Math.random()*cands.length)];
   seq=notes.map(n=>({midi:n.midi+shift, beats:n.beats, clef,
                      diatonic:midiInfo(n.midi+shift).diatonic}));
   const seen=new Set();                                 // 画面の鍵盤はこの曲に出る音だけ作る
@@ -669,8 +668,10 @@ el("namePanel").addEventListener("click",e=>{
 /* ---------- 画面の鍵盤 ---------- */
 function buildPiano(){
   if(!combined.length) return;
-  // 鍵盤の左右の端＝出題プールの最低音・最高音（余分な鍵を出さない）
-  const min=Math.min(...combined.map(o=>o.midi)), max=Math.max(...combined.map(o=>o.midi));
+  /* 鍵盤の端は必ずドに揃える。出題プールがドからドまでの通常モードでは今までと同じ範囲になり、
+     曲モードのように途中の音から始まる場合でも、鍵盤らしい形になって位置を見失わない。 */
+  const lo=Math.min(...combined.map(o=>o.midi)), hi=Math.max(...combined.map(o=>o.midi));
+  const min=Math.floor(lo/12)*12, max=Math.ceil(hi/12)*12;
   const whites=[]; for(let m=min;m<=max;m++) if(isNatural(m)) whites.push(m);
   const W=42, BW=26, piano=el("piano"); piano.innerHTML="";
   piano.style.width=(whites.length*W)+"px";
@@ -807,7 +808,8 @@ el("vol").value=sfxVol; setVol(sfxVol);
 (function initSongs(){
   const list=songList(), sel=el("songSel");
   if(!list.length){ el("modeSeg").querySelector('[data-q="song"]').classList.add("hidden"); return; }
-  list.forEach((s,i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=s.name; sel.appendChild(o); });
+  list.forEach((s,i)=>{ const o=document.createElement("option"); o.value=i;
+    o.textContent=s.name+"　"+"★".repeat(Math.max(1,Math.min(3,s.level||1))); sel.appendChild(o); });
   sel.value=0;
 })();
 syncModeUI();
