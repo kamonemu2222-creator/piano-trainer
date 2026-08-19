@@ -142,8 +142,6 @@ const RANGE_MIDI={
   bass:  {narrow:[48,60], wide:[36,60]},   // C3–C4 / C2–C4
 };
 function naturals(lo,hi){ const a=[]; for(let m=lo;m<=hi;m++) if(isNatural(m)) a.push(m); return a; }
-// 画面の鍵盤の左端（記号ごと）。null=出題プールに合わせる。ヘ音・混合は C1(=MIDI 24) から
-const KB_LOW_MIDI={treble:null, bass:24, both:24};
 
 /* ---------- 五線描画 ---------- */
 const NS="http://www.w3.org/2000/svg", staff=document.getElementById("staff");
@@ -179,27 +177,49 @@ function drawNote(m,clef){
 
 /* ---------- 状態 ---------- */
 let method="name", clefMode="treble", rangeMode="narrow";
-let combined=[], target=null, prev=null;
+let combined=[], bag=[], target=null, prev=null;
 let running=false, score=0, streak=0, timeLeft=60, timerId=null;
 const el=id=>document.getElementById(id);
 const setStats=()=>{el("score").textContent=score;el("streak").textContent=streak;el("time").textContent=timeLeft;};
 
 function buildPools(){
   const clefs = clefMode==="both" ? ["treble","bass"] : [clefMode];
-  combined=[];
+  combined=[]; bag=[];
   clefs.forEach(c=>{
     const [lo,hi]=RANGE_MIDI[c][rangeMode];
     naturals(lo,hi).forEach(m=>combined.push({midi:m, clef:c, diatonic:midiInfo(m).diatonic}));
   });
 }
 
-/* 同じ音・隣接する音を連続で出さない */
+/* 出題は「シャッフルした山札」から配る方式。
+   1周ですべての答えを1回ずつ出しきってから切り直すので、出題頻度が均等になる。
+   （以前のランダム＋やり直し方式だと、端の音が約1.14倍出やすかった）
+   音名ボタンのときは答えが「音名」なので、C4とC5のように同じ音名の音は1枚にまとめる。
+   ドからドまでの音域だとドだけ2〜3枚あることになり、「ド」が2倍出ていたため。 */
+function answerKey(o){
+  return method==="name" ? o.clef+"|"+(((o.midi%12)+12)%12) : o.clef+"|"+o.midi;
+}
+function addCycle(){
+  const groups=new Map();
+  combined.forEach(o=>{ const k=answerKey(o);
+    if(!groups.has(k)) groups.set(k,[]); groups.get(k).push(o); });
+  const cycle=[...groups.values()];
+  for(let i=cycle.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [cycle[i],cycle[j]]=[cycle[j],cycle[i]]; }
+  bag=bag.concat(cycle);
+}
+/* 同じ音・隣接する音は連続で出さない。使えない札は山札に残して後回しにするだけなので、
+   「1周で全部1回ずつ」は崩れない（＝均等さを保ったまま連続を避けられる） */
+const tooClose=(o,p)=>!!p && o.clef===p.clef && Math.abs(o.diatonic-p.diatonic)<2;
+const usable=g=>g.some(o=>!tooClose(o,prev));
 function pickTarget(){
-  let cand, tries=0;
-  do{
-    cand=combined[Math.floor(Math.random()*combined.length)]; tries++;
-    if(tries>50) break;
-  }while(prev && cand.clef===prev.clef && Math.abs(cand.diatonic-prev.diatonic)<2);
+  if(!bag.length) addCycle();
+  let idx=bag.findIndex(usable);
+  if(idx<0){ addCycle(); idx=bag.findIndex(usable); }   // 残り札が全部使えないときは次の周を先に足す
+  if(idx<0) idx=0;
+  const group=bag.splice(idx,1)[0];
+  const ok=group.filter(o=>!tooClose(o,prev));
+  const from=ok.length?ok:group;
+  const cand=from[Math.floor(Math.random()*from.length)];
   prev=cand; return cand;
 }
 function newTarget(){
@@ -245,11 +265,9 @@ el("namePanel").addEventListener("click",e=>{
 /* ---------- 画面の鍵盤 ---------- */
 function buildPiano(){
   if(!combined.length) return;
+  // 鍵盤の左右の端＝出題プールの最低音・最高音（余分な鍵を出さない）
   const min=Math.min(...combined.map(o=>o.midi)), max=Math.max(...combined.map(o=>o.midi));
-  const forced=KB_LOW_MIDI[clefMode];
-  const lowC=(forced!=null && forced<min) ? forced : Math.floor(min/12)*12;
-  const highC=Math.ceil((max+1)/12)*12;
-  const whites=[]; for(let m=lowC;m<=highC;m++) if(isNatural(m)) whites.push(m);
+  const whites=[]; for(let m=min;m<=max;m++) if(isNatural(m)) whites.push(m);
   const W=42, BW=26, piano=el("piano"); piano.innerHTML="";
   piano.style.width=(whites.length*W)+"px";
   whites.forEach((m,idx)=>{
@@ -263,9 +281,7 @@ function buildPiano(){
       b.style.left=(idx*W+W-BW/2)+"px"; b.dataset.note=m+1; piano.appendChild(b);
     }
   });
-  // 鍵盤が出題範囲より左に伸びている場合、出題される一番低い音が見えるところまで寄せる
-  const first=piano.querySelector('[data-note="'+min+'"]');
-  if(first) pianoScroll.scrollLeft=Math.max(0, first.offsetLeft-W);
+  pianoScroll.scrollLeft=0;
   syncKb();
 }
 el("piano").addEventListener("click",e=>{
@@ -339,16 +355,16 @@ function segHandler(segId,setter){
     setter(b.dataset); if(running) endGame();
   });
 }
-/* 設定を変えたら、スタート前でも鍵盤を作り直して今の設定を反映する */
-function refreshPiano(){ if(method!=="piano") return; buildPools(); buildPiano(); }
+/* 設定を変えたら、スタート前でも出題プール・山札・鍵盤を作り直して今の設定を反映する */
+function refreshSetup(){ buildPools(); if(method==="piano") buildPiano(); }
 segHandler("methodSeg",d=>{ method=d.m;
   el("namePanel").classList.toggle("hidden",method!=="name");
   el("pianoPanel").classList.toggle("hidden",method!=="piano");
   el("micPanel").classList.toggle("hidden",method!=="mic");
-  updateHint(); refreshPiano();
+  updateHint(); refreshSetup();
 });
-segHandler("clefSeg",d=>{ clefMode=d.c; refreshPiano(); });
-segHandler("rangeSeg",d=>{ rangeMode=d.r; refreshPiano(); });
+segHandler("clefSeg",d=>{ clefMode=d.c; refreshSetup(); });
+segHandler("rangeSeg",d=>{ rangeMode=d.r; refreshSetup(); });
 function updateHint(){
   const map={
     name:"音名ボタン：出た音符が「ドレミ…」のどれかをタップ。オクターブは不問。速読ドリル向き。",
