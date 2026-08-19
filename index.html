@@ -806,7 +806,10 @@ function buildPiano(){
       b.style.left=(idx*W+W-BW/2)+"px"; b.dataset.note=m+1; piano.appendChild(b);
     }
   });
-  pianoScroll.scrollLeft=0;
+  /* 鍵盤はドからドまで作るので、出題に使わない鍵が左側に余ることがある。
+     出題される一番低い音が左端に来るよう、最初のスクロール位置を寄せておく。 */
+  const first=piano.querySelector('[data-note="'+lo+'"]');
+  pianoScroll.scrollLeft = first ? Math.max(0, first.offsetLeft-W) : 0;
   syncKb();
 }
 el("piano").addEventListener("click",e=>{
