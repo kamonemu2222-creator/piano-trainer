@@ -3,61 +3,126 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>曲れんしゅう｜楽譜トレーナー</title>
+<title>フレーズ練習｜楽譜トレーナー</title>
 <style>
-  :root{--bg:#12131a;--panel:#1e2030;--accent:#7c9cff;--accent2:#ff9ecb;--ok:#5ee6a0;--ng:#ff6b7a;--text:#eef0ff;--muted:#9aa0c0;}
-  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-  body{margin:0;font-family:-apple-system,"Hiragino Kaku Gothic ProN",system-ui,sans-serif;background:var(--bg);color:var(--text);text-align:center;padding:12px;}
-  a{color:var(--accent);}
-  h1{font-size:20px;margin:4px 0 2px;}
-  .nav{font-size:12px;margin-bottom:10px;}
-  .card{background:var(--panel);border-radius:16px;padding:14px;margin:0 auto 12px;max-width:640px;box-shadow:0 6px 24px rgba(0,0,0,.35);}
-  .row{display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;}
-  select,button.btn{background:#0d0e16;color:var(--text);border:1px solid #333;border-radius:10px;padding:8px 12px;font-size:14px;font-weight:600;}
-  button.btn{background:var(--accent2);color:#1a0e16;border:0;}
-  label.vol{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;}
-  input[type=range]{width:120px;}
-  .toggle{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;}
+  :root{
+    --bg:#0e1014; --panel:#161920; --sunken:#11141a; --line:rgba(255,255,255,.085);
+    --text:#e9eaef; --muted:#8d92a3; --accent:#c9a962; --accent-ink:#15171c;
+    --ok:#7fbd97; --ng:#cf7b78; --paper:#f6f3ea; --ink:#1c1e26;
+    --serif:"Hiragino Mincho ProN","Yu Mincho",YuMincho,"Noto Serif JP",serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; padding:22px 14px 44px; background:var(--bg); color:var(--text);
+       font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+       text-align:center; -webkit-font-smoothing:antialiased;}
+  header{max-width:640px; margin:0 auto 20px;}
+  h1{font-family:var(--serif); font-size:25px; font-weight:600; letter-spacing:.2em;
+     margin:0 0 8px; text-indent:.2em;}
+  .tagline{font-size:10.5px; color:var(--muted); letter-spacing:.2em;}
+  .nav{margin-top:14px; font-size:12px;}
+  .nav a{color:var(--muted); text-decoration:none; border-bottom:1px solid var(--line); padding-bottom:3px;}
+  .nav a:hover{color:var(--accent); border-color:var(--accent);}
+
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px;
+        margin:0 auto 14px; max-width:640px; box-shadow:0 12px 32px rgba(0,0,0,.34);}
+
+  .settings{display:grid; grid-template-columns:1fr 1fr; text-align:left;}
+  .settings .full{grid-column:1/-1; padding-bottom:18px; margin-bottom:18px; border-bottom:1px solid var(--line);}
+  .col{padding:0 20px;}
+  .col:first-of-type{padding-left:0;}
+  .col:last-of-type{padding-right:0; border-left:1px solid var(--line);}
+  .col>h2{font-size:9.5px; letter-spacing:.2em; color:var(--muted); font-weight:600; margin:0 0 14px;}
+  .field+.field{margin-top:14px;}
+  .field>label{display:block; font-size:11px; color:var(--muted); letter-spacing:.1em; margin-bottom:7px;}
+
+  .selrow{display:flex; gap:8px; flex-wrap:wrap;}
+  select{flex:1; min-width:180px; background:var(--sunken); color:var(--text); font-family:inherit;
+         border:1px solid var(--line); border-radius:10px; padding:9px 12px; font-size:13px; font-weight:600;}
+  .btn{background:transparent; color:var(--muted); font-family:inherit; border:1px solid var(--line);
+       border-radius:10px; padding:9px 16px; font-size:12.5px; font-weight:600; letter-spacing:.06em;}
+  .btn:hover{color:var(--text); border-color:var(--accent);}
+  .check{display:flex; align-items:center; gap:9px; font-size:12.5px; color:var(--text); margin-bottom:11px;}
+  .check:last-child{margin-bottom:0;}
+  .check input{accent-color:var(--accent); width:15px; height:15px;}
+  input[type=range]{width:100%; max-width:180px; accent-color:var(--accent);}
+
+  .paper{background:var(--paper); border-radius:10px; padding:6px 0;
+         box-shadow:inset 0 0 0 1px rgba(0,0,0,.07); overflow:hidden;}
   .scrollx{overflow-x:auto;}
-  svg{display:block;margin:6px auto;height:220px;}
-  .msg{height:28px;font-size:18px;font-weight:800;margin:4px;}
-  /* piano */
-  .pianoWrap{overflow-x:auto;padding:6px 0;}
-  .piano{position:relative;height:150px;margin:0 auto;display:inline-block;}
-  .wkey{position:absolute;top:0;width:46px;height:150px;background:#f3f4ff;border:1px solid #3a3d55;border-radius:0 0 6px 6px;color:#556;font-size:11px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding-bottom:6px;font-weight:800;}
-  .wkey .lo{font-size:9px;color:#889;font-weight:600;}
-  .bkey{position:absolute;top:0;width:28px;height:96px;background:#181a26;border:1px solid #000;border-radius:0 0 5px 5px;z-index:2;color:#cfd;font-size:10px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px;font-weight:700;}
-  .wkey.active,.bkey.active{background:var(--accent);color:#0d0e16;}
-  .wkey.target{box-shadow:inset 0 0 0 3px var(--accent2);}
-  .bkey.target{box-shadow:inset 0 0 0 3px var(--accent2);}
-  .kbscroll{-webkit-appearance:none;appearance:none;display:block;width:100%;max-width:500px;height:12px;border-radius:7px;background:#2a2d44;margin:12px auto 2px;}
-  .kbscroll::-webkit-slider-thumb{-webkit-appearance:none;width:52px;height:30px;border-radius:9px;background:var(--accent);border:2px solid #0d0e16;}
-  .kbscroll::-moz-range-thumb{width:52px;height:30px;border-radius:9px;background:var(--accent);border:2px solid #0d0e16;}
-  .kbcap{font-size:11px;color:var(--muted);}
-  .hint{color:var(--muted);font-size:12px;line-height:1.6;max-width:640px;margin:8px auto;}
-  kbd{background:#0d0e16;border:1px solid #444;border-radius:5px;padding:1px 6px;font-size:12px;}
+  svg{display:block; margin:0 auto; height:172px;}
+  .msg{min-height:24px; font-size:12.5px; font-weight:600; letter-spacing:.08em; margin:14px 0 2px;}
+
+  .pianoWrap{overflow-x:auto; padding:8px 0; margin-top:8px;}
+  .piano{position:relative; height:148px; margin:0 auto; display:inline-block;}
+  .wkey{position:absolute; top:0; width:46px; height:148px; background:var(--paper); border:1px solid #c6c0b1;
+        border-radius:0 0 5px 5px; color:#57534a; font-size:11px; display:flex; flex-direction:column;
+        justify-content:flex-end; align-items:center; padding-bottom:7px; font-weight:700;}
+  .wkey .lo{font-size:9px; color:#9a9486; font-weight:600; margin-top:2px;}
+  .bkey{position:absolute; top:0; width:28px; height:94px; background:#1c1e26; border:1px solid #07080b;
+        border-radius:0 0 4px 4px; z-index:2; color:#b9b3a4; font-size:10px; display:flex;
+        align-items:flex-end; justify-content:center; padding-bottom:6px; font-weight:700;}
+  .wkey.active,.bkey.active{background:var(--accent); color:var(--accent-ink);}
+  .wkey.target{box-shadow:inset 0 0 0 3px var(--accent);}
+  .bkey.target{box-shadow:inset 0 0 0 2px var(--accent);}
+  .kbscroll{-webkit-appearance:none; appearance:none; display:block; width:100%; max-width:480px;
+            height:6px; border-radius:3px; background:var(--sunken); border:1px solid var(--line);
+            margin:10px auto 2px;}
+  .kbscroll::-webkit-slider-thumb{-webkit-appearance:none; width:56px; height:22px; border-radius:11px;
+            background:var(--accent); border:2px solid var(--panel);}
+  .kbscroll::-moz-range-thumb{width:56px; height:22px; border-radius:11px;
+            background:var(--accent); border:2px solid var(--panel);}
+  .kbcap{font-size:10.5px; color:var(--muted); letter-spacing:.1em; margin-top:4px;}
+
+  .hint{max-width:640px; margin:18px auto 0; color:var(--muted); font-size:11.5px;
+        line-height:2.1; text-align:left;}
+  .hint b{color:var(--text); font-weight:600;}
+  kbd{background:var(--sunken); border:1px solid var(--line); border-radius:5px;
+      padding:2px 7px; font-size:11px; margin:0 1px; color:var(--text);}
+
+  @media(max-width:540px){
+    .settings{grid-template-columns:1fr;}
+    .col{padding:0;}
+    .col:last-of-type{border-left:0; border-top:1px solid var(--line); margin-top:18px; padding-top:18px;}
+  }
 </style>
 </head>
 <body>
-<h1>🎼 曲れんしゅう</h1>
-<div class="nav"><a href="index.html">← 音符クイズにもどる</a></div>
+<header>
+  <h1>フレーズ練習</h1>
+  <div class="tagline">PHRASE PRACTICE</div>
+  <div class="nav"><a href="index.html">音符クイズへ戻る</a></div>
+</header>
 
 <div class="card">
-  <div class="row">
-    <select id="tuneSel"></select>
-    <button class="btn" id="resetBtn">最初から</button>
-    <label class="toggle"><input type="checkbox" id="allFinger"> 指番号ぜんぶ</label>
-    <label class="toggle"><input type="checkbox" id="hintKey" checked> 鍵盤ヒント</label>
-    <label class="vol">音量 <input type="range" id="vol" min="0" max="100" value="35"></label>
+  <div class="settings">
+    <div class="full field">
+      <label>曲</label>
+      <div class="selrow">
+        <select id="tuneSel"></select>
+        <button class="btn" id="resetBtn">最初から</button>
+      </div>
+    </div>
+    <div class="col">
+      <h2>表示</h2>
+      <label class="check"><input type="checkbox" id="allFinger">指番号をすべて表示</label>
+      <label class="check"><input type="checkbox" id="hintKey" checked>次に弾く鍵盤を示す</label>
+    </div>
+    <div class="col">
+      <h2>音</h2>
+      <div class="field">
+        <label>音量</label>
+        <input type="range" id="vol" min="0" max="100" value="35">
+      </div>
+    </div>
   </div>
 </div>
 
 <div class="card">
-  <div class="scrollx" id="staffWrap"><svg id="staff" aria-label="phrase"></svg></div>
-  <div class="msg" id="msg">下の鍵盤の文字＝PCのキー。表示された音符を順に弾いてね。</div>
+  <div class="paper"><div class="scrollx" id="staffWrap"><svg id="staff" aria-label="phrase"></svg></div></div>
+  <div class="msg" id="msg">鍵盤に書かれた文字がPCのキーです。表示された音符を順に演奏してください。</div>
   <div class="pianoWrap" id="pianoScroll"><div class="piano" id="piano"></div></div>
-  <div class="kbcap">← 鍵盤を左右にスクロール →</div>
   <input type="range" id="kbScroll" class="kbscroll" min="0" max="100" value="0" aria-label="鍵盤をスクロール">
+  <div class="kbcap">鍵盤は左右にスクロールできます</div>
 </div>
 
 <div class="hint" id="hint"></div>
@@ -80,7 +145,7 @@ const MIDI2KEY={}; for(const k in KEYMAP) MIDI2KEY[KEYMAP[k]]=k;
 /* ---------- 内蔵曲（右手・ト音）小節ごとの配列。各音符=[midi,指番号] ----------
    すべて「ド〜ソ(C4〜G4)の5本指ポジション」に収まる曲。指番号は1〜5で正確。 */
 const TUNES={
-  "ドレミファソ（5本指れんしゅう）":[
+  "ドレミファソ（5指ポジションの練習）":[
     [[60,1],[62,2],[64,3],[65,4]],[[67,5],[65,4],[64,3],[62,2]],[[60,1]]
   ],
   "ホット・クロス・バンズ":[
@@ -122,16 +187,17 @@ const TUNES={
 
 /* ---------- 五線に曲を描く ---------- */
 const NS="http://www.w3.org/2000/svg",staff=document.getElementById("staff");
+const INK="#1c1e26", DONE="#b3ada0", HALO="rgba(201,169,98,.42)";
 const LINE_GAP=16,Y_BOTTOM=130,X0=72,DX=34,MG=16,Y_FINGER=40;
 function mk(tag,attrs){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);return e;}
-function line(x1,y1,x2,y2,w,c){staff.appendChild(mk("line",{x1,y1,x2,y2,stroke:c||"#cfd4ff","stroke-width":w||1.6}));}
+function line(x1,y1,x2,y2,w,c){staff.appendChild(mk("line",{x1,y1,x2,y2,stroke:c||INK,"stroke-width":w||1.4}));}
 const yFor=s=>Y_BOTTOM-s*(LINE_GAP/2);
 
 let phrase=[], measures=[], idx=0;
 
 function barLine(x,topY,dbl){
-  line(x,topY,x,Y_BOTTOM,dbl?2.6:1.4,"#8890b8");
-  if(dbl) line(x-4,topY,x-4,Y_BOTTOM,1.2,"#8890b8");
+  line(x,topY,x,Y_BOTTOM,dbl?2.6:1.2,INK);
+  if(dbl) line(x-4,topY,x-4,Y_BOTTOM,1.2,INK);
 }
 function drawPhrase(){
   while(staff.firstChild) staff.removeChild(staff.firstChild);
@@ -139,17 +205,17 @@ function drawPhrase(){
   const topY=Y_BOTTOM-4*LINE_GAP;
   let total=X0; measures.forEach(mr=>total+=mr.length*DX+MG);
   const width=total+30;
-  staff.setAttribute("viewBox",`0 0 ${width} 220`); staff.setAttribute("width",width);
+  staff.setAttribute("viewBox",`0 0 ${width} 172`); staff.setAttribute("width",width);
   for(let i=0;i<5;i++) line(20,Y_BOTTOM-i*LINE_GAP,width-10,Y_BOTTOM-i*LINE_GAP);
-  const g=mk("text",{x:24,y:Y_BOTTOM+8,"font-size":72,fill:"#cfd4ff"});g.textContent="𝄞";staff.appendChild(g);
+  const g=mk("text",{x:24,y:Y_BOTTOM+8,"font-size":72,fill:INK});g.textContent="𝄞";staff.appendChild(g);
 
   let x=X0, gi=0, curX=X0;
   measures.forEach((mr,mi)=>{
     mr.forEach(n=>{
       const m=n[0],finger=n[1];
       const steps=info(m).diatonic-E4, y=yFor(steps);
-      const color = gi<idx ? "#5ee6a0" : (gi===idx ? "#7c9cff" : "#ffffff");
-      if(gi===idx) curX=x;
+      const color = gi<idx ? DONE : INK;
+      if(gi===idx){ curX=x; staff.appendChild(mk("circle",{cx:x,cy:y,r:15,fill:HALO})); }
       for(let s=-2;s>=steps;s-=2) line(x-13,yFor(s),x+13,yFor(s),1.6);
       for(let s=10;s<=steps;s+=2) line(x-13,yFor(s),x+13,yFor(s),1.6);
       staff.appendChild(mk("ellipse",{cx:x,cy:y,rx:10,ry:7.5,transform:`rotate(-20 ${x} ${y})`,fill:color}));
@@ -157,7 +223,7 @@ function drawPhrase(){
       if(!info(m).nat){ const sh=mk("text",{x:x-22,y:y+5,"font-size":18,fill:color});sh.textContent="♯";staff.appendChild(sh);}
       const jump = gi>0 && Math.abs(finger-phrase[gi-1][1])>=2;
       if(finger && (gi===0||showAll||jump)){
-        const t=mk("text",{x,y:Y_FINGER,"font-size":15,"text-anchor":"middle",fill:gi===idx?"#ff9ecb":"#9aa0c0","font-weight":"700"});
+        const t=mk("text",{x,y:Y_FINGER,"font-size":15,"text-anchor":"middle",fill:gi===idx?"#96712a":"#8d8878","font-weight":"700"});
         t.textContent=finger; staff.appendChild(t);
       }
       x+=DX; gi++;
@@ -230,10 +296,10 @@ function judge(m){
   if(idx>=phrase.length) return;
   if(m===phrase[idx][0]){
     idx++; drawPhrase(); refreshTargetHint();
-    if(idx>=phrase.length){ setMsg("🎉 クリア！ 全部あってます！","var(--ok)"); }
-    else setMsg("いいね！つぎの音へ","var(--ok)");
+    if(idx>=phrase.length){ setMsg("完了　最後まで正しく演奏できました","var(--accent)"); }
+    else setMsg("正解　次の音へ","var(--ok)");
   } else {
-    setMsg("ちがう音。譜面の🔵の音符を弾いてね","var(--ng)");
+    setMsg("音が違います。譜面で示されている音符を演奏してください","var(--ng)");
     const cur=keyEl(phrase[idx][0]); // 正解キーを一瞬ゆらす
   }
 }
@@ -264,7 +330,7 @@ document.getElementById("piano").addEventListener("pointerdown",e=>{
 function loadTune(name){
   measures=TUNES[name].map(mr=>mr.map(n=>n.slice()));
   phrase=measures.flat(); idx=0; drawPhrase(); refreshTargetHint();
-  setMsg("スタート地点です。最初の音符から弾いてね","var(--text)"); }
+  setMsg("最初の音符から演奏してください（鍵盤に書かれた文字がPCのキーです）","var(--muted)"); }
 const sel=document.getElementById("tuneSel");
 Object.keys(TUNES).forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=n;sel.appendChild(o);});
 sel.addEventListener("change",()=>loadTune(sel.value));
@@ -273,9 +339,9 @@ document.getElementById("allFinger").addEventListener("change",drawPhrase);
 document.getElementById("hintKey").addEventListener("change",refreshTargetHint);
 
 document.getElementById("hint").innerHTML=
-  '割り当て：白鍵 <kbd>a</kbd><kbd>s</kbd><kbd>d</kbd><kbd>f</kbd><kbd>g</kbd><kbd>h</kbd><kbd>j</kbd><kbd>k</kbd><kbd>l</kbd><kbd>；</kbd> = ド4〜ミ5、'+
-  '黒鍵(♯) は上段 <kbd>w</kbd><kbd>e</kbd><kbd>t</kbd><kbd>y</kbd><kbd>u</kbd><kbd>o</kbd><kbd>p</kbd>。'+
-  '譜面の🔵が今弾く音。合えば緑になって次へ進みます（リズムは自由・自分のペースでOK）。';
+  'キー割り当て：白鍵 <kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>F</kbd><kbd>G</kbd><kbd>H</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd><kbd>；</kbd> がド4〜ミ5、'+
+  '黒鍵（♯）は上段の <kbd>W</kbd><kbd>E</kbd><kbd>T</kbd><kbd>Y</kbd><kbd>U</kbd><kbd>O</kbd><kbd>P</kbd> です。<br>'+
+  '<b>金色で示されている音符</b>が次に弾く音です。正しく弾くと薄い表示に変わり、次の音へ進みます。リズムは自由なので、自分のペースで構いません。';
 
 /* init */
 buildPiano(); loadTune(sel.value);
