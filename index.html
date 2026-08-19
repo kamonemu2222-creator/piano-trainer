@@ -42,6 +42,9 @@
   .col-opt[open]>summary::after{transform:translateY(1px) rotate(225deg);}
   .col-opt:not([open]){border-left-color:transparent;}
   .col-opt>summary:hover{color:var(--text);}
+  select{width:100%; background:var(--sunken); color:var(--text); font-family:inherit;
+          border:1px solid var(--line); border-radius:10px; padding:8px 10px;
+          font-size:12.5px; font-weight:600;}
   .vol{display:flex; align-items:center; gap:10px;}
   .vol input[type=range]{-webkit-appearance:none; appearance:none; flex:1; height:4px; border-radius:2px;
        background:var(--sunken); border:1px solid var(--line); accent-color:var(--accent);}
@@ -174,6 +177,17 @@
 
     <div class="col col-main">
       <h2>出題</h2>
+      <div class="field" id="modeField">
+        <label>出題</label>
+        <div class="seg" id="modeSeg">
+          <button data-q="random" class="on">ランダム</button>
+          <button data-q="song">曲</button>
+        </div>
+      </div>
+      <div class="field hidden" id="songField">
+        <label>曲</label>
+        <select id="songSel"></select>
+      </div>
       <div class="field">
         <label>音部記号</label>
         <div class="seg" id="clefSeg">
@@ -182,7 +196,7 @@
           <button data-c="both">混合</button>
         </div>
       </div>
-      <div class="field">
+      <div class="field" id="rangeField">
         <label>音域</label>
         <div class="seg" id="rangeSeg">
           <button data-r="narrow" class="on">1オクターブ</button>
@@ -193,13 +207,20 @@
 
     <details class="col col-opt">
       <summary>オプション</summary>
-      <div class="field">
+      <div class="field" id="timeField">
         <label>制限時間</label>
         <div class="seg" id="timeSeg">
           <button data-t="60" class="on">60秒</button>
           <button data-t="90">90秒</button>
           <button data-t="120">120秒</button>
           <button data-t="0">なし</button>
+        </div>
+      </div>
+      <div class="field hidden" id="shuffleField">
+        <label>オクターブ</label>
+        <div class="seg" id="octSeg">
+          <button data-o="fixed" class="on">そのまま</button>
+          <button data-o="vary">毎回変える</button>
         </div>
       </div>
       <div class="field">
@@ -258,6 +279,7 @@
 
 <div class="hint" id="hint"></div>
 
+<script src="songs.js"></script>
 <script>
 /* ---------- 音符データ ---------- */
 const PC_TO_LETTER={0:"C",2:"D",4:"E",5:"F",7:"G",9:"A",11:"B"};
@@ -288,6 +310,24 @@ const RANGE_MIDI={
   bass:  {narrow:[48,60], wide:[36,60]},   // C3–C4 / C2–C4
 };
 function naturals(lo,hi){ const a=[]; for(let m=lo;m<=hi;m++) if(isNatural(m)) a.push(m); return a; }
+
+/* ---------- 曲データ（songs.js）の解釈 ----------
+   "C C G G | A A G-" のような文字列を音符の並びに変換する。
+   オクターブは「最後に数字で指定した高さ」がそのまま続く（初期値は4）。
+   推測はしない。オクターブをまたぐところだけ数字を書けばよく、結果が予測しやすい。 */
+const LETTER_PC={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+function parseNotes(src){
+  const out=[]; let oct=4;
+  (src||"").replace(/\|/g," ").split(/\s+/).forEach(tok=>{
+    const m=/^([A-G])(\d?)([-._]*)$/.exec(tok); if(!m) return;
+    if(m[2]) oct=parseInt(m[2],10);
+    let beats=1;
+    for(const c of m[3]){ if(c==="-") beats+=1; else if(c===".") beats*=1.5; else if(c==="_") beats*=0.5; }
+    out.push({midi:(oct+1)*12+LETTER_PC[m[1]], beats});
+  });
+  return out;
+}
+const songList=()=> (typeof window!=="undefined" && window.SONGS) ? window.SONGS : [];
 
 /* ---------- 五線描画 ---------- */
 const NS="http://www.w3.org/2000/svg", staff=document.getElementById("staff");
@@ -333,6 +373,8 @@ function drawNote(m,clef,animate){
 /* ---------- 状態 ---------- */
 let method="name", clefMode="treble", rangeMode="narrow";
 let timeLimit=60, focusWeak=true;
+let quizMode="random", songIdx=0, octVary=false;      // 曲モードの状態
+let seq=[], songPos=0, songT0=0, lastAnsT=0, songGaps=[];
 let combined=[], bag=[], target=null, prev=null, prevKey=null;
 let running=false, score=0, streak=0, rafTimer=null, startTs=0, msgId=null;
 
@@ -363,9 +405,33 @@ function showMsg(text,color,ms){
 }
 const isMilestone=n=> n===5 || n===10 || (n>10 && n%10===0);
 
+/* 五線に描ける範囲（加線が多すぎて枠から出ないところまで） */
+const STEP_MIN=-6, STEP_MAX=13;
+const stepsOf=(midi,clef)=>midiInfo(midi).diatonic-CLEF_BOTTOM[clef];
+function fitsStaff(notes,clef,shift){
+  return notes.every(n=>{ const st=stepsOf(n.midi+shift,clef); return st>=STEP_MIN && st<=STEP_MAX; });
+}
+function buildSong(){
+  const list=songList(); if(!list.length){ seq=[]; return; }
+  const song=list[Math.min(songIdx,list.length-1)];
+  const clef = clefMode==="bass" ? "bass" : "treble";   // 混合は曲では意味がないのでト音にする
+  const notes=parseNotes(song.notes);
+  const base = clef==="bass" ? -24 : 0;                 // ヘ音記号では2オクターブ下げて読む
+  let shift=base;
+  if(octVary){                                          // 覚えてしまわないよう読む位置を変える
+    const ok=[-12,0,12].map(o=>base+o).filter(sh=>fitsStaff(notes,clef,sh));
+    if(ok.length) shift=ok[Math.floor(Math.random()*ok.length)];
+  }
+  if(!fitsStaff(notes,clef,shift)) shift=base;
+  seq=notes.map(n=>({midi:n.midi+shift, beats:n.beats, clef,
+                     diatonic:midiInfo(n.midi+shift).diatonic}));
+  const seen=new Set();                                 // 画面の鍵盤はこの曲に出る音だけ作る
+  seq.forEach(o=>{ if(!seen.has(o.midi)){ seen.add(o.midi); combined.push(o); } });
+}
 function buildPools(){
   const clefs = clefMode==="both" ? ["treble","bass"] : [clefMode];
   combined=[]; bag=[];
+  if(quizMode==="song"){ buildSong(); return; }
   clefs.forEach(c=>{
     const [lo,hi]=RANGE_MIDI[c][rangeMode];
     naturals(lo,hi).forEach(m=>combined.push({midi:m, clef:c, diatonic:midiInfo(m).diatonic}));
@@ -408,7 +474,11 @@ function pickTarget(){
   prev=cand; prevKey=answerKey(cand); return cand;
 }
 function newTarget(animate){
-  target=pickTarget();
+  if(quizMode==="song"){
+    if(songPos>=seq.length){ endGame(true); return; }
+    target=seq[songPos];
+    el("timerFill").style.transform="scaleX("+(songPos/seq.length)+")";
+  } else target=pickTarget();
   drawNote(target.midi,target.clef,animate);
   el("clefCap").textContent=CLEF_NAME[target.clef];
   if(method==="mic") el("detected").textContent="—";
@@ -428,8 +498,24 @@ function flashName(m,clef){
 }
 
 const SWAP_MS=120;   // 正解してから次の音符が出るまで（CSSの .note の transition と揃える）
+/* 曲モードの正解音。和音だとメロディが濁るので単音。音価に応じて響きの長さを変える */
+function playNote(midi,beats){
+  if(method==="mic" || sfxVol<=0) return;
+  const ctx=ensureSfx(); if(!ctx) return;
+  if(ctx.state==="suspended") ctx.resume();
+  const dur=Math.min(2.6, 0.8+0.6*(beats||1));
+  const src=ctx.createBufferSource();
+  src.buffer=pluckBuffer(ctx,midiFreq(midi),dur,0.9975);
+  const g=ctx.createGain(); g.gain.value=(sfxVol/100)*0.52;
+  src.connect(g); g.connect(sfxOut);
+  const t0=ctx.currentTime+0.005; src.start(t0); src.stop(t0+dur+0.05);
+}
 function correct(){
-  playChord(target.midi);
+  if(quizMode==="song"){
+    playNote(target.midi,target.beats);
+    songGaps.push(Date.now()-lastAnsT); lastAnsT=Date.now();
+    songPos++;
+  } else playChord(target.midi);
   flashName(target.midi,target.clef);
   noteHit(answerKey(target));
   score++; streak++; setStats();
@@ -448,6 +534,11 @@ function wrong(){
 function startGame(){
   if(running){ endGame(); return; }
   buildPools(); prev=null; prevKey=null;
+  songPos=0; songGaps=[]; songT0=lastAnsT=Date.now();
+  if(quizMode==="song" && !seq.length){
+    el("feedback").textContent="曲データを読み込めませんでした（songs.js）";
+    el("feedback").style.color="var(--ng)"; running=false; return;
+  }
   score=0; streak=0; setStats(); running=true;
   clearTimeout(msgId);
   el("feedback").textContent=""; el("weak").innerHTML=""; el("startBtn").textContent="中断";
@@ -455,18 +546,27 @@ function startGame(){
   if(method==="piano") buildPiano();
   if(sfxVol>0 && method!=="mic"){ const c=ensureSfx(); if(c&&c.state==="suspended") c.resume(); }
   cancelAnimationFrame(rafTimer);
-  el("timerbar").style.visibility = timeLimit>0 ? "visible" : "hidden";
-  el("timerFill").style.transform="scaleX(1)";
-  startTs=Date.now(); if(timeLimit>0) tickTimer();
+  const useTimer = quizMode!=="song" && timeLimit>0;
+  el("timerbar").style.visibility = (quizMode==="song"||timeLimit>0) ? "visible" : "hidden";
+  el("timerFill").style.transform = quizMode==="song" ? "scaleX(0)" : "scaleX(1)";
+  startTs=Date.now(); if(useTimer) tickTimer();
   newTarget(true);
   if(method==="mic") startMic();
 }
-function endGame(){
+function endGame(complete){
+  const wasRunning=running;
   running=false; cancelAnimationFrame(rafTimer); stopMic();
   el("startBtn").textContent="開始";
   el("timerbar").style.visibility="hidden";
   clearTimeout(msgId);
-  el("feedback").textContent=`終了　正解 ${score} 問`;
+  if(quizMode==="song" && wasRunning){
+    const secs=(Date.now()-songT0)/1000;
+    const avg=songGaps.length ? songGaps.reduce((a,b)=>a+b,0)/songGaps.length/1000 : 0;
+    el("feedback").textContent = (complete?"完奏":"中断")
+      +`　${songPos}/${seq.length}音　${secs.toFixed(1)}秒　平均 ${avg.toFixed(2)}秒/音`;
+  } else {
+    el("feedback").textContent=`終了　正解 ${score} 問`;
+  }
   el("feedback").style.color="var(--accent)";
   renderWeak();
 }
@@ -667,6 +767,17 @@ segHandler("methodSeg",d=>{ method=d.m;
   el("micPanel").classList.toggle("hidden",method!=="mic");
   updateHint(); refreshSetup();
 });
+function syncModeUI(){
+  const song = quizMode==="song";
+  el("songField").classList.toggle("hidden",!song);
+  el("rangeField").classList.toggle("hidden",song);
+  el("timeField").classList.toggle("hidden",song);
+  el("shuffleField").classList.toggle("hidden",!song);
+}
+segHandler("modeSeg",d=>{ quizMode=d.q; syncModeUI(); updateHint(); refreshSetup(); });
+segHandler("octSeg",d=>{ octVary=(d.o==="vary"); refreshSetup(); });
+el("songSel").addEventListener("change",e=>{ songIdx=parseInt(e.target.value,10)||0;
+  if(running) endGame(); refreshSetup(); });
 segHandler("clefSeg",d=>{ clefMode=d.c; refreshSetup(); });
 segHandler("rangeSeg",d=>{ rangeMode=d.r; refreshSetup(); });
 segHandler("timeSeg",d=>{ timeLimit=parseInt(d.t,10); });
@@ -678,12 +789,28 @@ function updateHint(){
     piano:"表示された音符と<b>同じ高さの鍵盤</b>を選びます（オクターブも一致させてください）。Cの鍵盤に音名を表示しています。",
     mic:"表示された音符を実際の楽器で演奏し、マイクで判定します。※<b>https</b> または <b>http://localhost</b> で開いた場合のみ利用できます。"
   };
-  el("hint").innerHTML="<p>"+map[method]+"</p><p>出題は<b>すべての音が一巡するまで重複しない</b>方式です。苦手音の出題を「重点的に」にすると、間違えた音が一巡あたり2〜3回出題され、正解を重ねると通常の頻度に戻ります。苦手音の記録はこの端末に保存されます。</p><p>正解すると、その音をルートにした和音が鳴ります（音量はオプションで調整でき、0にすると消音）。正解すると<b>音名（C4（ド）など）</b>が音符の横に一瞬出ます。間違えたときは不安定な響き（三全音）が短く鳴ります。マイク入力のときは自分の楽器の音と混ざるため、音は鳴りません。</p>";
+  const song="<p><b>曲モード</b>：メロディの順に音符が出ます。正解するとその音が鳴るので、"
+    +"<b>速く続けて当てるほどメロディがなめらかにつながります</b>。間違えると先へ進みません。"
+    +"音部記号をヘ音にすると、同じ曲を左手の音域で読む練習になります。"
+    +"曲の追加や差し替えは <b>songs.js</b> を編集するだけでできます。</p>";
+  const random="<p>出題は<b>すべての音が一巡するまで重複しない</b>方式です。苦手音の出題を「重点的に」にすると、"
+    +"間違えた音が一巡あたり2〜3回出題され、正解を重ねると通常の頻度に戻ります。苦手音の記録はこの端末に保存されます。</p>"
+    +"<p>正解すると、その音をルートにした和音が鳴ります。</p>";
+  const common="<p>正解すると<b>音名（C4（ド）など）</b>が音符の横に一瞬出ます。間違えたときは不安定な響き（三全音）が"
+    +"短く鳴ります。音量はオプションで調整でき、0にすると消音です。マイク入力のときは自分の楽器の音と混ざるため鳴りません。</p>";
+  el("hint").innerHTML="<p>"+map[method]+"</p>"+(quizMode==="song"?song:random)+common;
 }
 
 /* ---------- init ---------- */
 el("startBtn").addEventListener("click",startGame);
 el("vol").value=sfxVol; setVol(sfxVol);
+(function initSongs(){
+  const list=songList(), sel=el("songSel");
+  if(!list.length){ el("modeSeg").querySelector('[data-q="song"]').classList.add("hidden"); return; }
+  list.forEach((s,i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=s.name; sel.appendChild(o); });
+  sel.value=0;
+})();
+syncModeUI();
 drawStaff("treble"); updateHint(); setStats(); renderWeak();
 </script>
 </body>
