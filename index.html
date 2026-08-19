@@ -79,14 +79,19 @@
               transform-origin:left center; transform:scaleX(1);}
 
   /* ---- 譜面（紙の質感） ---- */
-  .paper{background:var(--paper); border-radius:10px; padding:10px 6px 6px;
+  .paper{position:relative; background:var(--paper); border-radius:10px; padding:10px 6px 6px;
          box-shadow:inset 0 0 0 1px rgba(0,0,0,.07), 0 1px 0 rgba(255,255,255,.04);}
   svg{display:block; margin:0 auto; width:100%; max-width:440px; height:auto;}
   .cap{font-size:10.5px; color:var(--muted); letter-spacing:.16em; margin-top:12px;}
+  .flash{position:absolute; pointer-events:none; white-space:nowrap; color:var(--ink);
+         font-size:13px; font-weight:700; letter-spacing:.02em; opacity:0;
+         transition:opacity .55s ease;}
+  .flash.show{opacity:.95; transition:none;}
+  @media(prefers-reduced-motion:reduce){ .flash{transition:opacity .2s linear;} }
   .feedback{height:22px; font-size:13px; font-weight:700; letter-spacing:.12em; margin:10px 0 2px;}
   #staff .note{transition:opacity .14s ease, transform .14s ease;}
-  #staff .note.in{opacity:0; transform:translateY(5px);}
-  #staff .note.out{opacity:0; transform:translateY(-5px);}
+  #staff .note.in{opacity:0; transform:translateY(7px);}
+  #staff .note.out{opacity:0; transform:translateY(-7px);}
   @keyframes staffShake{
     0%{transform:translateX(0)} 16%{transform:translateX(-6px)} 32%{transform:translateX(5px)}
     48%{transform:translateX(-3px)} 66%{transform:translateX(2px)} 100%{transform:translateX(0)}}
@@ -223,7 +228,8 @@
 
 <div class="card">
   <div class="timerbar" id="timerbar"><i id="timerFill"></i></div>
-  <div class="paper" id="paper"><svg id="staff" viewBox="0 0 440 176" aria-label="staff"></svg></div>
+  <div class="paper" id="paper"><svg id="staff" viewBox="0 0 440 176" aria-label="staff"></svg>
+    <div class="flash" id="flash" aria-live="polite"></div></div>
   <div class="cap" id="clefCap"></div>
   <div class="feedback" id="feedback"></div>
   <div class="weak" id="weak"></div>
@@ -408,17 +414,31 @@ function newTarget(animate){
   if(method==="mic") el("detected").textContent="—";
 }
 
+/* 正解した音の音名を、いま音符があった場所の横に一瞬出してからフェードさせる。
+   譜面上の位置と音名が同じ場所で結びつくので、記憶に残りやすい。 */
+function flashName(m,clef){
+  const f=el("flash"), info=midiInfo(m);
+  f.textContent=info.letter+info.octave+"（"+info.solfege+"）";
+  const r=staff.getBoundingClientRect(), pr=el("paper").getBoundingClientRect(), k=r.width/440;
+  const y=yForSteps(info.diatonic-CLEF_BOTTOM[clef]);
+  f.style.left=(r.left-pr.left+(X_NOTE+20)*k)+"px";
+  f.style.top =(r.top -pr.top +(y-9)*k)+"px";
+  f.classList.add("show");
+  requestAnimationFrame(()=>requestAnimationFrame(()=>f.classList.remove("show")));
+}
+
 const SWAP_MS=120;   // 正解してから次の音符が出るまで（CSSの .note の transition と揃える）
 function correct(){
   playChord(target.midi);
+  flashName(target.midi,target.clef);
   noteHit(answerKey(target));
   score++; streak++; setStats();
   if(noteG) noteG.classList.add("out");
   if(isMilestone(streak)) showMsg(streak+" 連続","var(--accent)",1100);
   setTimeout(()=>{ if(running) newTarget(true); },SWAP_MS);
 }
-function wrong(chosenMidi){
-  if(chosenMidi!=null) playMiss(chosenMidi);
+function wrong(){
+  playMiss(target.midi);
   noteMissed(answerKey(target));
   streak=0; setStats();
   const pp=el("paper"); pp.classList.remove("shake"); void pp.offsetWidth; pp.classList.add("shake");
@@ -431,6 +451,7 @@ function startGame(){
   score=0; streak=0; setStats(); running=true;
   clearTimeout(msgId);
   el("feedback").textContent=""; el("weak").innerHTML=""; el("startBtn").textContent="中断";
+  el("flash").classList.remove("show"); el("flash").textContent="";
   if(method==="piano") buildPiano();
   if(sfxVol>0 && method!=="mic"){ const c=ensureSfx(); if(c&&c.state==="suspended") c.resume(); }
   cancelAnimationFrame(rafTimer);
@@ -499,28 +520,21 @@ function playChord(midi){
     src.stop(t0+k*0.038+1.75);
   });
 }
-/* 不正解のときは「自分が選んだ音」を短くミュート気味に1音だけ鳴らす。
-   罰ではなく答え合わせ。正解の和音より短く・小さくして、失敗が目立ちすぎないようにする。 */
+/* 不正解のときは、出題音とその三全音（♭5）を短く2音だけ鳴らす。
+   三全音は最も不安定な響きなので、一瞬で「違う」と分かる。
+   正解の和音より短く・小さくして、失敗が目立ちすぎないようにする。 */
 function playMiss(midi){
   if(method==="mic" || sfxVol<=0) return;
   const ctx=ensureSfx(); if(!ctx) return;
   if(ctx.state==="suspended") ctx.resume();
-  const src=ctx.createBufferSource();
-  src.buffer=pluckBuffer(ctx,midiFreq(midi),0.36,0.984);
-  const g=ctx.createGain(); g.gain.value=(sfxVol/100)*0.30;
-  src.connect(g); g.connect(sfxOut);
   const t0=ctx.currentTime+0.01;
-  src.start(t0); src.stop(t0+0.4);
-}
-/* 音名ボタンは高さを指定しないので、出題音にいちばん近いオクターブで鳴らす */
-function nearestWithPc(pc,ref){
-  let m=Math.floor(ref/12)*12+pc;
-  if(m-ref>6) m-=12; else if(ref-m>6) m+=12;
-  if(combined.length){            // 出題範囲の外に出たら1オクターブ戻す（低すぎて聞こえないのを防ぐ）
-    const lo=Math.min(...combined.map(o=>o.midi)), hi=Math.max(...combined.map(o=>o.midi));
-    if(hi-lo>=11){ while(m<lo) m+=12; while(m>hi) m-=12; }
-  }
-  return m;
+  [[0,0.28,0],[6,0.24,0.012]].forEach(([iv,amp,dt])=>{
+    const src=ctx.createBufferSource();
+    src.buffer=pluckBuffer(ctx,midiFreq(midi+iv),0.42,0.988);
+    const g=ctx.createGain(); g.gain.value=(sfxVol/100)*amp;
+    src.connect(g); g.connect(sfxOut);
+    src.start(t0+dt); src.stop(t0+dt+0.5);
+  });
 }
 function setVol(v){
   sfxVol=Math.max(0,Math.min(100,v|0));
@@ -548,8 +562,8 @@ function renderWeak(){
 /* ---------- 音名ボタン ---------- */
 el("namePanel").addEventListener("click",e=>{
   const b=e.target.closest("button"); if(!b||!running||method!=="name") return;
-  const pc=(((target.midi%12)+12)%12), chosen=parseInt(b.dataset.note,10);
-  if(chosen===pc) correct(); else wrong(nearestWithPc(chosen,target.midi));
+  const pc=(((target.midi%12)+12)%12);
+  if(parseInt(b.dataset.note,10)===pc) correct(); else wrong();
 });
 
 /* ---------- 画面の鍵盤 ---------- */
@@ -576,8 +590,7 @@ function buildPiano(){
 }
 el("piano").addEventListener("click",e=>{
   const k=e.target.closest(".wkey,.bkey"); if(!k||!running||method!=="piano") return;
-  const chosen=parseInt(k.dataset.note,10);
-  if(chosen===target.midi) correct(); else wrong(chosen);
+  if(parseInt(k.dataset.note,10)===target.midi) correct(); else wrong();
 });
 /* 鍵盤スクロール用スライダー（鍵に触れず左右移動） */
 const pianoScroll=el("pianoScroll"), kbScroll=el("kbScroll");
@@ -665,7 +678,7 @@ function updateHint(){
     piano:"表示された音符と<b>同じ高さの鍵盤</b>を選びます（オクターブも一致させてください）。Cの鍵盤に音名を表示しています。",
     mic:"表示された音符を実際の楽器で演奏し、マイクで判定します。※<b>https</b> または <b>http://localhost</b> で開いた場合のみ利用できます。"
   };
-  el("hint").innerHTML="<p>"+map[method]+"</p><p>出題は<b>すべての音が一巡するまで重複しない</b>方式です。苦手音の出題を「重点的に」にすると、間違えた音が一巡あたり2〜3回出題され、正解を重ねると通常の頻度に戻ります。苦手音の記録はこの端末に保存されます。</p><p>正解すると、その音をルートにした和音が鳴ります（音量はオプションで調整でき、0にすると消音）。間違えたときは<b>自分が選んだ音</b>が短く鳴るので、どの音を弾いたのかが耳で確かめられます。マイク入力のときは自分の楽器の音と混ざるため、どちらも鳴りません。</p>";
+  el("hint").innerHTML="<p>"+map[method]+"</p><p>出題は<b>すべての音が一巡するまで重複しない</b>方式です。苦手音の出題を「重点的に」にすると、間違えた音が一巡あたり2〜3回出題され、正解を重ねると通常の頻度に戻ります。苦手音の記録はこの端末に保存されます。</p><p>正解すると、その音をルートにした和音が鳴ります（音量はオプションで調整でき、0にすると消音）。正解すると<b>音名（C4（ド）など）</b>が音符の横に一瞬出ます。間違えたときは不安定な響き（三全音）が短く鳴ります。マイク入力のときは自分の楽器の音と混ざるため、音は鳴りません。</p>";
 }
 
 /* ---------- init ---------- */
