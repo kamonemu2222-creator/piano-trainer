@@ -31,9 +31,17 @@
   .settings{display:grid; grid-template-columns:1fr 1fr; text-align:left;}
   .settings .full{grid-column:1/-1; padding-bottom:18px; margin-bottom:18px; border-bottom:1px solid var(--line);}
   .col{padding:0 20px;}
-  .col:first-of-type{padding-left:0;}
-  .col:last-of-type{padding-right:0; border-left:1px solid var(--line);}
+  .col-main{padding-left:0;}
+  .col-opt{padding-right:0; border-left:1px solid var(--line);}
   .col>h2{font-size:9.5px; letter-spacing:.2em; color:var(--muted); font-weight:600; margin:0 0 14px;}
+  .col-opt>summary{list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px;
+       font-size:9.5px; letter-spacing:.2em; color:var(--muted); font-weight:600; margin-bottom:14px;}
+  .col-opt>summary::-webkit-details-marker{display:none;}
+  .col-opt>summary::after{content:""; width:5px; height:5px; border-right:1px solid currentColor;
+       border-bottom:1px solid currentColor; transform:translateY(-2px) rotate(45deg); transition:transform .2s;}
+  .col-opt[open]>summary::after{transform:translateY(1px) rotate(225deg);}
+  .col-opt:not([open]){border-left-color:transparent;}
+  .col-opt>summary:hover{color:var(--text);}
   .field+.field{margin-top:14px;}
   .field>label{display:block; font-size:11px; color:var(--muted); letter-spacing:.1em; margin-bottom:7px;}
 
@@ -55,12 +63,27 @@
           letter-spacing:.18em; font-family:inherit; text-indent:.18em;}
   .bigbtn:hover{filter:brightness(1.07);}
 
+  /* ---- 残り時間（数字ではなく細い線） ---- */
+  .timerbar{height:2px; background:var(--line); border-radius:1px; overflow:hidden;
+            margin:0 0 16px; visibility:hidden;}
+  .timerbar i{display:block; height:100%; background:var(--accent);
+              transform-origin:left center; transform:scaleX(1);}
+
   /* ---- 譜面（紙の質感） ---- */
   .paper{background:var(--paper); border-radius:10px; padding:10px 6px 6px;
          box-shadow:inset 0 0 0 1px rgba(0,0,0,.07), 0 1px 0 rgba(255,255,255,.04);}
   svg{display:block; margin:0 auto; width:100%; max-width:440px; height:auto;}
   .cap{font-size:10.5px; color:var(--muted); letter-spacing:.16em; margin-top:12px;}
   .feedback{height:22px; font-size:13px; font-weight:700; letter-spacing:.12em; margin:10px 0 2px;}
+  #staff .note{transition:opacity .21s ease, transform .21s ease;}
+  #staff .note.in{opacity:0; transform:translateY(7px);}
+  #staff .note.out{opacity:0; transform:translateY(-7px);}
+  @keyframes staffShake{
+    0%{transform:translateX(0)} 16%{transform:translateX(-6px)} 32%{transform:translateX(5px)}
+    48%{transform:translateX(-3px)} 66%{transform:translateX(2px)} 100%{transform:translateX(0)}}
+  .paper.shake{animation:staffShake .38s ease-out;}
+  @media(prefers-reduced-motion:reduce){
+    #staff .note{transition:none;} .paper.shake{animation:none;}}
 
   .weak{display:flex; flex-wrap:wrap; gap:6px; justify-content:center; align-items:center;
         font-size:11px; color:var(--muted); margin-top:10px; min-height:0;}
@@ -112,7 +135,7 @@
   @media(max-width:540px){
     .settings{grid-template-columns:1fr;}
     .col{padding:0;}
-    .col:last-of-type{border-left:0; border-top:1px solid var(--line); margin-top:18px; padding-top:18px;}
+    .col-opt{border-left:0; border-top:1px solid var(--line); margin-top:18px; padding-top:18px;}
     .stats{gap:26px;}
   }
 </style>
@@ -135,7 +158,7 @@
       </div>
     </div>
 
-    <div class="col">
+    <div class="col col-main">
       <h2>出題</h2>
       <div class="field">
         <label>音部記号</label>
@@ -154,8 +177,8 @@
       </div>
     </div>
 
-    <div class="col">
-      <h2>オプション</h2>
+    <details class="col col-opt">
+      <summary>オプション</summary>
       <div class="field">
         <label>制限時間</label>
         <div class="seg" id="timeSeg">
@@ -172,19 +195,19 @@
           <button data-f="off">均等に</button>
         </div>
       </div>
-    </div>
+    </details>
   </div>
 
   <div class="stats">
     <div><span id="score">0</span><small>正解数</small></div>
     <div><span id="streak">0</span><small>連続正解</small></div>
-    <div><span id="time">60</span><small>残り時間</small></div>
   </div>
   <button class="bigbtn" id="startBtn">開始</button>
 </div>
 
 <div class="card">
-  <div class="paper"><svg id="staff" viewBox="0 0 440 176" aria-label="staff"></svg></div>
+  <div class="timerbar" id="timerbar"><i id="timerFill"></i></div>
+  <div class="paper" id="paper"><svg id="staff" viewBox="0 0 440 176" aria-label="staff"></svg></div>
   <div class="cap" id="clefCap"></div>
   <div class="feedback" id="feedback"></div>
   <div class="weak" id="weak"></div>
@@ -227,7 +250,13 @@ function midiInfo(m){
 }
 // 各記号ごとの「一番下の線」の音（diatonic基準）
 const CLEF_BOTTOM={treble:4*7+LETTER_INDEX.E /*E4=30*/, bass:2*7+LETTER_INDEX.G /*G2=18*/};
-const CLEF_GLYPH={treble:"𝄞", bass:"𝄢"};
+/* 音部記号は環境依存のUnicodeグリフをやめ、平筆で書いた輪郭をSVGパスとして持つ。
+   座標系は「線間=1、原点=基準線（ト音記号はG4線、ヘ音記号はF3線）」。 */
+const CLEF_PATH={
+ treble:"M-.7,2.62L-.64,2.66L-.58,2.7L-.52,2.72L-.47,2.74L-.41,2.73L-.36,2.72L-.32,2.69L-.28,2.66L-.25,2.63L-.21,2.59L-.19,2.55L-.16,2.5L-.14,2.45L-.12,2.39L-.11,2.34L-.1,2.27L-.09,2.21L-.09,2.15L-.08,1.91L-.08,1.66L-.08,1.4L-.07,1.13L-.07,.84L-.07,.55L-.06,.25L-.06,-.06L-.05,-.36L-.05,-.67L-.04,-.98L-.04,-1.28L-.03,-1.58L-.03,-1.88L-.02,-2.16L-.02,-2.44L-.02,-2.7L-.02,-2.95L-.01,-3.05L-.01,-3.13L-.02,-3.21L-.03,-3.28L-.05,-3.35L-.07,-3.41L-.09,-3.47L-.12,-3.52L-.15,-3.57L-.19,-3.61L-.23,-3.65L-.28,-3.67L-.33,-3.65L-.37,-3.62L-.41,-3.59L-.45,-3.55L-.49,-3.5L-.54,-3.44L-.58,-3.39L-.61,-3.33L-.64,-3.27L-.66,-3.2L-.68,-3.13L-.69,-3.06L-.7,-2.99L-.71,-2.91L-.71,-2.84L-.71,-2.76L-.7,-2.68L-.69,-2.59L-.67,-2.51L-.65,-2.43L-.62,-2.35L-.59,-2.27L-.55,-2.19L-.51,-2.11L-.45,-2.03L-.38,-1.94L-.31,-1.86L-.24,-1.77L-.16,-1.69L-.08,-1.61L.01,-1.54L.09,-1.46L.18,-1.38L.27,-1.31L.36,-1.23L.45,-1.15L.54,-1.07L.63,-.99L.71,-.91L.8,-.82L.88,-.72L.97,-.62L1.05,-.49L1.12,-.35L1.18,-.21L1.22,-.07L1.26,.07L1.28,.22L1.29,.37L1.29,.51L1.27,.66L1.25,.8L1.2,.94L1.15,1.08L1.08,1.21L.99,1.33L.9,1.44L.79,1.55L.67,1.64L.53,1.72L.38,1.78L.23,1.82L.08,1.84L-.06,1.84L-.19,1.83L-.32,1.8L-.45,1.76L-.58,1.74L-.7,1.71L-.83,1.66L-.95,1.6L-1.06,1.52L-1.17,1.43L-1.26,1.32L-1.35,1.2L-1.42,1.06L-1.47,.9L-1.5,.75L-1.52,.61L-1.53,.47L-1.51,.33L-1.48,.19L-1.44,.06L-1.38,-.07L-1.31,-.19L-1.23,-.31L-1.14,-.41L-1.03,-.5L-.92,-.58L-.8,-.64L-.68,-.68L-.55,-.71L-.42,-.71L-.29,-.7L-.17,-.67L-.05,-.63L.05,-.61L.15,-.59L.24,-.55L.32,-.51L.39,-.46L.46,-.39L.51,-.32L.55,-.24L.58,-.16L.59,-.08L.6,.01L.59,.09L.56,.18L.52,.25L.47,.33L.4,.4L.33,.46L.24,.51L.16,.53L.09,.53L.02,.53L-.04,.52L-.1,.51L-.16,.49L-.21,.46L-.26,.43L-.3,.39L-.33,.34L-.35,.29L-.37,.24L-.37,.18L-.36,.13L-.34,.08L-.31,.03L-.27,-.02L-.22,-.06L-.22,-.06L-.27,-.01L-.3,.04L-.32,.09L-.34,.14L-.34,.19L-.33,.23L-.32,.28L-.3,.32L-.27,.36L-.24,.4L-.2,.44L-.15,.47L-.1,.49L-.04,.51L.02,.51L.08,.5L.14,.48L.2,.45L.27,.39L.33,.33L.38,.26L.41,.2L.43,.13L.45,.07L.45,0L.45,-.06L.44,-.13L.42,-.19L.39,-.25L.36,-.31L.31,-.37L.26,-.43L.2,-.48L.12,-.53L.04,-.58L-.05,-.61L-.18,-.63L-.3,-.62L-.4,-.59L-.5,-.55L-.6,-.5L-.68,-.43L-.75,-.36L-.82,-.28L-.89,-.2L-.95,-.11L-1,-.01L-1.04,.09L-1.08,.19L-1.11,.29L-1.13,.39L-1.14,.49L-1.14,.59L-1.14,.69L-1.12,.83L-1.1,.95L-1.06,1.06L-1.02,1.17L-.97,1.27L-.91,1.37L-.83,1.46L-.75,1.54L-.66,1.61L-.55,1.68L-.44,1.73L-.32,1.73L-.19,1.72L-.07,1.7L.05,1.66L.16,1.61L.27,1.55L.37,1.48L.46,1.39L.54,1.3L.61,1.21L.68,1.11L.73,1.01L.77,.91L.81,.81L.84,.7L.87,.59L.88,.48L.89,.37L.89,.25L.89,.13L.87,.01L.85,-.11L.82,-.24L.77,-.36L.73,-.48L.68,-.57L.62,-.67L.55,-.76L.48,-.85L.4,-.93L.32,-1.01L.24,-1.1L.15,-1.17L.07,-1.25L-.02,-1.33L-.11,-1.41L-.19,-1.49L-.28,-1.56L-.37,-1.64L-.45,-1.72L-.53,-1.81L-.61,-1.89L-.69,-1.99L-.75,-2.07L-.81,-2.16L-.86,-2.25L-.9,-2.34L-.94,-2.44L-.96,-2.54L-.99,-2.63L-1,-2.73L-1,-2.83L-1,-2.93L-.99,-3.03L-.97,-3.12L-.95,-3.21L-.91,-3.3L-.87,-3.38L-.82,-3.46L-.76,-3.53L-.7,-3.6L-.63,-3.66L-.56,-3.7L-.48,-3.73L-.4,-3.73L-.33,-3.72L-.27,-3.7L-.21,-3.69L-.15,-3.68L-.08,-3.65L-.02,-3.61L.03,-3.56L.08,-3.49L.12,-3.42L.16,-3.34L.19,-3.25L.21,-3.15L.22,-3.05L.22,-2.95L.22,-2.7L.22,-2.44L.22,-2.16L.22,-1.88L.21,-1.58L.21,-1.28L.21,-.98L.21,-.67L.2,-.36L.2,-.05L.19,.25L.18,.55L.18,.85L.17,1.13L.16,1.41L.15,1.67L.14,1.92L.13,2.15L.12,2.24L.1,2.32L.08,2.39L.05,2.46L.01,2.53L-.03,2.59L-.07,2.64L-.12,2.68L-.18,2.72L-.24,2.74L-.3,2.76L-.35,2.76L-.41,2.76L-.47,2.75L-.52,2.73L-.58,2.71L-.64,2.67L-.7,2.62Z",
+ bass:"M-.19,-.16L-.1,-.3L0,-.41L.1,-.51L.2,-.58L.31,-.63L.42,-.66L.52,-.65L.61,-.62L.69,-.57L.75,-.53L.83,-.52L.91,-.49L.98,-.45L1.05,-.38L1.1,-.31L1.15,-.23L1.18,-.13L1.2,-.03L1.21,.09L1.21,.22L1.2,.34L1.19,.47L1.17,.59L1.14,.72L1.1,.84L1.05,.96L1,1.08L.94,1.2L.88,1.31L.81,1.43L.74,1.54L.66,1.65L.57,1.76L.47,1.86L.37,1.96L.26,2.06L.17,2.13L.08,2.19L-.01,2.25L-.11,2.31L-.2,2.36L-.3,2.4L-.39,2.45L-.49,2.49L-.59,2.53L-.68,2.56L-.78,2.59L-.88,2.62L-.98,2.65L-1.07,2.67L-1.17,2.69L-1.27,2.7L-1.36,2.72L-1.46,2.72L-1.46,2.72L-1.37,2.69L-1.28,2.66L-1.19,2.62L-1.1,2.59L-1.01,2.55L-.92,2.51L-.83,2.47L-.74,2.42L-.66,2.37L-.58,2.32L-.49,2.27L-.41,2.21L-.33,2.15L-.26,2.09L-.18,2.02L-.11,1.96L-.04,1.89L.02,1.82L.1,1.72L.18,1.61L.25,1.51L.32,1.41L.38,1.31L.45,1.2L.5,1.1L.56,1L.6,.9L.64,.8L.68,.7L.71,.6L.74,.5L.76,.4L.78,.3L.79,.19L.79,.09L.8,-.01L.8,-.06L.8,-.12L.79,-.18L.78,-.24L.77,-.29L.76,-.35L.74,-.4L.71,-.46L.66,-.47L.61,-.43L.56,-.4L.53,-.35L.49,-.31L.44,-.26L.39,-.2L.33,-.13L.27,-.04L.19,.08Z M.53,0L.52,.11L.48,.22L.43,.31L.35,.39L.27,.46L.16,.5L.06,.53L-.06,.53L-.16,.5L-.26,.46L-.35,.39L-.43,.31L-.48,.22L-.52,.11L-.53,0L-.52,-.11L-.48,-.22L-.43,-.31L-.35,-.39L-.27,-.46L-.16,-.5L-.06,-.53L.06,-.53L.16,-.5L.27,-.46L.35,-.39L.43,-.31L.48,-.22L.52,-.11Z M1.66,-.5L1.65,-.46L1.64,-.43L1.62,-.4L1.6,-.37L1.57,-.35L1.53,-.33L1.5,-.33L1.46,-.33L1.43,-.33L1.39,-.35L1.36,-.37L1.34,-.4L1.32,-.43L1.31,-.46L1.3,-.5L1.31,-.54L1.32,-.57L1.34,-.6L1.36,-.63L1.39,-.65L1.43,-.67L1.46,-.67L1.5,-.67L1.53,-.67L1.57,-.65L1.6,-.63L1.62,-.6L1.64,-.57L1.65,-.54Z M1.66,.5L1.65,.54L1.64,.57L1.62,.6L1.6,.63L1.57,.65L1.53,.67L1.5,.67L1.46,.67L1.43,.67L1.39,.65L1.36,.63L1.34,.6L1.32,.57L1.31,.54L1.3,.5L1.31,.46L1.32,.43L1.34,.4L1.36,.37L1.39,.35L1.43,.33L1.46,.33L1.5,.33L1.53,.33L1.57,.35L1.6,.37L1.62,.4L1.64,.43L1.65,.46Z"};
+const CLEF_REF={treble:2, bass:6};   // 基準線の位置（下線からの半音程数）
+const CLEF_DX ={treble:26, bass:26}; // 五線の左端からの距離
 const CLEF_NAME ={treble:"ト音記号", bass:"ヘ音記号"};
 
 // 記号×範囲ごとの出題プール（ナチュラルのみ）
@@ -241,40 +270,48 @@ function naturals(lo,hi){ const a=[]; for(let m=lo;m<=hi;m++) if(isNatural(m)) a
 const NS="http://www.w3.org/2000/svg", staff=document.getElementById("staff");
 const INK="#1c1e26";
 const LINE_GAP=16, X_LEFT=44, X_RIGHT=420, X_NOTE=250, Y_BOTTOM=120;
+/* 彫版の標準比率（線間=1として）：五線0.13 / 加線0.16 / 符幹0.12・長さ3.5 / 符頭幅1.18・高さ1.0 */
+const W_STAFF=LINE_GAP*0.13, W_LEDGER=LINE_GAP*0.16, W_STEM=LINE_GAP*0.12,
+      L_STEM =LINE_GAP*3.5,  R_HEAD_X=9.6, R_HEAD_Y=7.8, LEDGER_HALF=LINE_GAP*0.99;
 function clearSvg(){ while(staff.firstChild) staff.removeChild(staff.firstChild); }
-function line(x1,y1,x2,y2,w=1.4,color=INK){
+function line(x1,y1,x2,y2,w=W_STAFF,color=INK,parent=staff){
   const l=document.createElementNS(NS,"line");
   l.setAttribute("x1",x1);l.setAttribute("y1",y1);l.setAttribute("x2",x2);l.setAttribute("y2",y2);
-  l.setAttribute("stroke",color);l.setAttribute("stroke-width",w);staff.appendChild(l);
+  l.setAttribute("stroke",color);l.setAttribute("stroke-width",w);parent.appendChild(l);
 }
 const yForSteps=s=>Y_BOTTOM-s*(LINE_GAP/2);
 function drawStaff(clef){
   clearSvg();
   for(let i=0;i<5;i++) line(X_LEFT,Y_BOTTOM-i*LINE_GAP,X_RIGHT,Y_BOTTOM-i*LINE_GAP);
-  const g=document.createElementNS(NS,"text");
-  g.setAttribute("x",X_LEFT+2);
-  g.setAttribute("y", clef==="treble"?Y_BOTTOM+8:Y_BOTTOM-1.4*LINE_GAP);
-  g.setAttribute("font-size", clef==="treble"?"72":"48");
-  g.setAttribute("fill",INK); g.textContent=CLEF_GLYPH[clef]; staff.appendChild(g);
+  const c=document.createElementNS(NS,"path");
+  c.setAttribute("d",CLEF_PATH[clef]); c.setAttribute("fill",INK);
+  c.setAttribute("transform",`translate(${X_LEFT+CLEF_DX[clef]},${yForSteps(CLEF_REF[clef])}) scale(${LINE_GAP})`);
+  staff.appendChild(c);
 }
-function drawNote(m,clef){
+let noteG=null;
+function drawNote(m,clef,animate){
   drawStaff(clef);
+  const g=document.createElementNS(NS,"g"); g.setAttribute("class","note"); staff.appendChild(g);
+  noteG=g;
   const steps=midiInfo(m).diatonic - CLEF_BOTTOM[clef];
   const y=yForSteps(steps);
-  for(let s=-2;s>=steps;s-=2) line(X_NOTE-16,yForSteps(s),X_NOTE+16,yForSteps(s),1.6);
-  for(let s=10;s<=steps;s+=2) line(X_NOTE-16,yForSteps(s),X_NOTE+16,yForSteps(s),1.6);
+  for(let sp=-2;sp>=steps;sp-=2) line(X_NOTE-LEDGER_HALF,yForSteps(sp),X_NOTE+LEDGER_HALF,yForSteps(sp),W_LEDGER,INK,g);
+  for(let sp=10;sp<=steps;sp+=2) line(X_NOTE-LEDGER_HALF,yForSteps(sp),X_NOTE+LEDGER_HALF,yForSteps(sp),W_LEDGER,INK,g);
   const head=document.createElementNS(NS,"ellipse");
-  head.setAttribute("cx",X_NOTE);head.setAttribute("cy",y);head.setAttribute("rx",11);head.setAttribute("ry",8);
-  head.setAttribute("transform",`rotate(-20 ${X_NOTE} ${y})`);head.setAttribute("fill",INK);staff.appendChild(head);
-  const up=steps<4, sx=up?X_NOTE+10:X_NOTE-10, sy2=up?y-52:y+52;
-  line(sx,y,sx,sy2,2,INK);
+  head.setAttribute("cx",X_NOTE);head.setAttribute("cy",y);
+  head.setAttribute("rx",R_HEAD_X);head.setAttribute("ry",R_HEAD_Y);
+  head.setAttribute("transform",`rotate(-20 ${X_NOTE} ${y})`);head.setAttribute("fill",INK);g.appendChild(head);
+  const up=steps<4, sx=up?X_NOTE+(R_HEAD_X-W_STEM/2):X_NOTE-(R_HEAD_X-W_STEM/2), sy2=up?y-L_STEM:y+L_STEM;
+  line(sx,y,sx,sy2,W_STEM,INK,g);
+  if(animate){ g.classList.add("in");
+    requestAnimationFrame(()=>requestAnimationFrame(()=>g.classList.remove("in"))); }
 }
 
 /* ---------- 状態 ---------- */
 let method="name", clefMode="treble", rangeMode="narrow";
 let timeLimit=60, focusWeak=true;
 let combined=[], bag=[], target=null, prev=null, prevKey=null;
-let running=false, score=0, streak=0, timeLeft=60, timerId=null;
+let running=false, score=0, streak=0, rafTimer=null, startTs=0, msgId=null;
 
 /* ---------- 苦手音の記録（ブラウザに保存） ---------- */
 const MISS_STORE="gakufuTrainer.miss.v1";
@@ -287,8 +324,21 @@ function noteHit(k){ if(miss[k]){ miss[k]--; if(!miss[k]) delete miss[k]; saveMi
 // 苦手度に応じて、その音の札を1周あたり最大3枚まで増やす
 const cardsFor=k=>{ if(!focusWeak) return 1; const m=miss[k]||0; return m>=3?3:(m>=1?2:1); };
 const el=id=>document.getElementById(id);
-const setStats=()=>{el("score").textContent=score;el("streak").textContent=streak;
-  el("time").textContent=timeLimit>0?timeLeft:"∞";};
+const setStats=()=>{el("score").textContent=score;el("streak").textContent=streak;};
+/* 残り時間は数字ではなく、譜面の上の細い線が減っていく形で示す */
+function tickTimer(){
+  if(!running||!timeLimit) return;
+  const total=timeLimit*1000, left=Math.max(0,total-(Date.now()-startTs));
+  el("timerFill").style.transform="scaleX("+(left/total)+")";
+  if(left<=0){ endGame(); return; }
+  rafTimer=requestAnimationFrame(tickTimer);
+}
+/* 短いメッセージ（節目の連続正解・不正解）。ふだんの正解では何も出さない */
+function showMsg(text,color,ms){
+  const f=el("feedback"); f.textContent=text; f.style.color=color;
+  clearTimeout(msgId); msgId=setTimeout(()=>{ f.textContent=""; },ms);
+}
+const isMilestone=n=> n===5 || n===10 || (n>10 && n%10===0);
 
 function buildPools(){
   const clefs = clefMode==="both" ? ["treble","bass"] : [clefMode];
@@ -334,9 +384,9 @@ function pickTarget(){
   const cand=from[Math.floor(Math.random()*from.length)];
   prev=cand; prevKey=answerKey(cand); return cand;
 }
-function newTarget(){
+function newTarget(animate){
   target=pickTarget();
-  drawNote(target.midi,target.clef);
+  drawNote(target.midi,target.clef,animate);
   el("clefCap").textContent=CLEF_NAME[target.clef];
   if(method==="mic") el("detected").textContent="—";
 }
@@ -344,33 +394,39 @@ function newTarget(){
 function correct(){
   noteHit(answerKey(target));
   score++; streak++; setStats();
-  el("feedback").textContent="正解"; el("feedback").style.color="var(--ok)";
-  setTimeout(()=>{ el("feedback").textContent=""; if(running) newTarget(); },500);
+  if(noteG) noteG.classList.add("out");
+  if(isMilestone(streak)) showMsg(streak+" 連続","var(--accent)",1100);
+  setTimeout(()=>{ if(running) newTarget(true); },170);
 }
 function wrong(){
   noteMissed(answerKey(target));
   streak=0; setStats();
-  el("feedback").textContent="不正解"; el("feedback").style.color="var(--ng)";
-  setTimeout(()=>{ el("feedback").textContent=""; },500);
+  const pp=el("paper"); pp.classList.remove("shake"); void pp.offsetWidth; pp.classList.add("shake");
+  showMsg("不正解","var(--ng)",650);
 }
 
 function startGame(){
   if(running){ endGame(); return; }
   buildPools(); prev=null; prevKey=null;
-  score=0; streak=0; timeLeft=timeLimit; setStats(); running=true;
+  score=0; streak=0; setStats(); running=true;
+  clearTimeout(msgId);
   el("feedback").textContent=""; el("weak").innerHTML=""; el("startBtn").textContent="中断";
   if(method==="piano") buildPiano();
-  clearInterval(timerId);
-  if(timeLimit>0) timerId=setInterval(()=>{ timeLeft--; setStats(); if(timeLeft<=0) endGame(); },1000);
-  newTarget();
+  cancelAnimationFrame(rafTimer);
+  el("timerbar").style.visibility = timeLimit>0 ? "visible" : "hidden";
+  el("timerFill").style.transform="scaleX(1)";
+  startTs=Date.now(); if(timeLimit>0) tickTimer();
+  newTarget(true);
   if(method==="mic") startMic();
 }
 function endGame(){
-  running=false; clearInterval(timerId); stopMic();
+  running=false; cancelAnimationFrame(rafTimer); stopMic();
   el("startBtn").textContent="開始";
+  el("timerbar").style.visibility="hidden";
+  clearTimeout(msgId);
   el("feedback").textContent=`終了　正解 ${score} 問`;
   el("feedback").style.color="var(--accent)";
-  timeLeft=timeLimit; setStats(); renderWeak();
+  renderWeak();
 }
 
 /* ---------- 苦手音の表示 ---------- */
@@ -500,7 +556,7 @@ segHandler("methodSeg",d=>{ method=d.m;
 });
 segHandler("clefSeg",d=>{ clefMode=d.c; refreshSetup(); });
 segHandler("rangeSeg",d=>{ rangeMode=d.r; refreshSetup(); });
-segHandler("timeSeg",d=>{ timeLimit=parseInt(d.t,10); timeLeft=timeLimit; setStats(); });
+segHandler("timeSeg",d=>{ timeLimit=parseInt(d.t,10); });
 segHandler("focusSeg",d=>{ focusWeak=(d.f==="on"); refreshSetup(); });
 function updateHint(){
   const map={
