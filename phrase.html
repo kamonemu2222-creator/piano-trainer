@@ -189,8 +189,14 @@ const TUNES={
 const NS="http://www.w3.org/2000/svg",staff=document.getElementById("staff");
 const INK="#1c1e26", DONE="#b3ada0", HALO="rgba(201,169,98,.42)";
 const LINE_GAP=16,Y_BOTTOM=130,X0=72,DX=34,MG=16,Y_FINGER=40;
+/* 彫版の標準比率（線間=1として）：五線0.13 / 加線0.16 / 符幹0.12・長さ3.5 / 符頭幅1.18・高さ1.0 */
+const W_STAFF=LINE_GAP*0.13, W_LEDGER=LINE_GAP*0.16, W_STEM=LINE_GAP*0.12,
+      L_STEM=LINE_GAP*3.5, R_HEAD_X=9.6, R_HEAD_Y=7.8, LEDGER_HALF=LINE_GAP*0.99;
+/* 音部記号は環境依存のUnicodeグリフをやめ、平筆で書いた輪郭をSVGパスとして持つ。
+   座標系は「線間=1、原点=G4線」。 */
+const CLEF_TREBLE="M-.7,2.62L-.64,2.66L-.58,2.7L-.52,2.72L-.47,2.74L-.41,2.73L-.36,2.72L-.32,2.69L-.28,2.66L-.25,2.63L-.21,2.59L-.19,2.55L-.16,2.5L-.14,2.45L-.12,2.39L-.11,2.34L-.1,2.27L-.09,2.21L-.09,2.15L-.08,1.91L-.08,1.66L-.08,1.4L-.07,1.13L-.07,.84L-.07,.55L-.06,.25L-.06,-.06L-.05,-.36L-.05,-.67L-.04,-.98L-.04,-1.28L-.03,-1.58L-.03,-1.88L-.02,-2.16L-.02,-2.44L-.02,-2.7L-.02,-2.95L-.01,-3.05L-.01,-3.13L-.02,-3.21L-.03,-3.28L-.05,-3.35L-.07,-3.41L-.09,-3.47L-.12,-3.52L-.15,-3.57L-.19,-3.61L-.23,-3.65L-.28,-3.67L-.33,-3.65L-.37,-3.62L-.41,-3.59L-.45,-3.55L-.49,-3.5L-.54,-3.44L-.58,-3.39L-.61,-3.33L-.64,-3.27L-.66,-3.2L-.68,-3.13L-.69,-3.06L-.7,-2.99L-.71,-2.91L-.71,-2.84L-.71,-2.76L-.7,-2.68L-.69,-2.59L-.67,-2.51L-.65,-2.43L-.62,-2.35L-.59,-2.27L-.55,-2.19L-.51,-2.11L-.45,-2.03L-.38,-1.94L-.31,-1.86L-.24,-1.77L-.16,-1.69L-.08,-1.61L.01,-1.54L.09,-1.46L.18,-1.38L.27,-1.31L.36,-1.23L.45,-1.15L.54,-1.07L.63,-.99L.71,-.91L.8,-.82L.88,-.72L.97,-.62L1.05,-.49L1.12,-.35L1.18,-.21L1.22,-.07L1.26,.07L1.28,.22L1.29,.37L1.29,.51L1.27,.66L1.25,.8L1.2,.94L1.15,1.08L1.08,1.21L.99,1.33L.9,1.44L.79,1.55L.67,1.64L.53,1.72L.38,1.78L.23,1.82L.08,1.84L-.06,1.84L-.19,1.83L-.32,1.8L-.45,1.76L-.58,1.74L-.7,1.71L-.83,1.66L-.95,1.6L-1.06,1.52L-1.17,1.43L-1.26,1.32L-1.35,1.2L-1.42,1.06L-1.47,.9L-1.5,.75L-1.52,.61L-1.53,.47L-1.51,.33L-1.48,.19L-1.44,.06L-1.38,-.07L-1.31,-.19L-1.23,-.31L-1.14,-.41L-1.03,-.5L-.92,-.58L-.8,-.64L-.68,-.68L-.55,-.71L-.42,-.71L-.29,-.7L-.17,-.67L-.05,-.63L.05,-.61L.15,-.59L.24,-.55L.32,-.51L.39,-.46L.46,-.39L.51,-.32L.55,-.24L.58,-.16L.59,-.08L.6,.01L.59,.09L.56,.18L.52,.25L.47,.33L.4,.4L.33,.46L.24,.51L.16,.53L.09,.53L.02,.53L-.04,.52L-.1,.51L-.16,.49L-.21,.46L-.26,.43L-.3,.39L-.33,.34L-.35,.29L-.37,.24L-.37,.18L-.36,.13L-.34,.08L-.31,.03L-.27,-.02L-.22,-.06L-.22,-.06L-.27,-.01L-.3,.04L-.32,.09L-.34,.14L-.34,.19L-.33,.23L-.32,.28L-.3,.32L-.27,.36L-.24,.4L-.2,.44L-.15,.47L-.1,.49L-.04,.51L.02,.51L.08,.5L.14,.48L.2,.45L.27,.39L.33,.33L.38,.26L.41,.2L.43,.13L.45,.07L.45,0L.45,-.06L.44,-.13L.42,-.19L.39,-.25L.36,-.31L.31,-.37L.26,-.43L.2,-.48L.12,-.53L.04,-.58L-.05,-.61L-.18,-.63L-.3,-.62L-.4,-.59L-.5,-.55L-.6,-.5L-.68,-.43L-.75,-.36L-.82,-.28L-.89,-.2L-.95,-.11L-1,-.01L-1.04,.09L-1.08,.19L-1.11,.29L-1.13,.39L-1.14,.49L-1.14,.59L-1.14,.69L-1.12,.83L-1.1,.95L-1.06,1.06L-1.02,1.17L-.97,1.27L-.91,1.37L-.83,1.46L-.75,1.54L-.66,1.61L-.55,1.68L-.44,1.73L-.32,1.73L-.19,1.72L-.07,1.7L.05,1.66L.16,1.61L.27,1.55L.37,1.48L.46,1.39L.54,1.3L.61,1.21L.68,1.11L.73,1.01L.77,.91L.81,.81L.84,.7L.87,.59L.88,.48L.89,.37L.89,.25L.89,.13L.87,.01L.85,-.11L.82,-.24L.77,-.36L.73,-.48L.68,-.57L.62,-.67L.55,-.76L.48,-.85L.4,-.93L.32,-1.01L.24,-1.1L.15,-1.17L.07,-1.25L-.02,-1.33L-.11,-1.41L-.19,-1.49L-.28,-1.56L-.37,-1.64L-.45,-1.72L-.53,-1.81L-.61,-1.89L-.69,-1.99L-.75,-2.07L-.81,-2.16L-.86,-2.25L-.9,-2.34L-.94,-2.44L-.96,-2.54L-.99,-2.63L-1,-2.73L-1,-2.83L-1,-2.93L-.99,-3.03L-.97,-3.12L-.95,-3.21L-.91,-3.3L-.87,-3.38L-.82,-3.46L-.76,-3.53L-.7,-3.6L-.63,-3.66L-.56,-3.7L-.48,-3.73L-.4,-3.73L-.33,-3.72L-.27,-3.7L-.21,-3.69L-.15,-3.68L-.08,-3.65L-.02,-3.61L.03,-3.56L.08,-3.49L.12,-3.42L.16,-3.34L.19,-3.25L.21,-3.15L.22,-3.05L.22,-2.95L.22,-2.7L.22,-2.44L.22,-2.16L.22,-1.88L.21,-1.58L.21,-1.28L.21,-.98L.21,-.67L.2,-.36L.2,-.05L.19,.25L.18,.55L.18,.85L.17,1.13L.16,1.41L.15,1.67L.14,1.92L.13,2.15L.12,2.24L.1,2.32L.08,2.39L.05,2.46L.01,2.53L-.03,2.59L-.07,2.64L-.12,2.68L-.18,2.72L-.24,2.74L-.3,2.76L-.35,2.76L-.41,2.76L-.47,2.75L-.52,2.73L-.58,2.71L-.64,2.67L-.7,2.62Z";
 function mk(tag,attrs){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);return e;}
-function line(x1,y1,x2,y2,w,c){staff.appendChild(mk("line",{x1,y1,x2,y2,stroke:c||INK,"stroke-width":w||1.4}));}
+function line(x1,y1,x2,y2,w,c){staff.appendChild(mk("line",{x1,y1,x2,y2,stroke:c||INK,"stroke-width":w||W_STAFF}));}
 const yFor=s=>Y_BOTTOM-s*(LINE_GAP/2);
 
 let phrase=[], measures=[], idx=0;
@@ -206,8 +212,8 @@ function drawPhrase(){
   let total=X0; measures.forEach(mr=>total+=mr.length*DX+MG);
   const width=total+30;
   staff.setAttribute("viewBox",`0 0 ${width} 172`); staff.setAttribute("width",width);
-  for(let i=0;i<5;i++) line(20,Y_BOTTOM-i*LINE_GAP,width-10,Y_BOTTOM-i*LINE_GAP);
-  const g=mk("text",{x:24,y:Y_BOTTOM+8,"font-size":72,fill:INK});g.textContent="𝄞";staff.appendChild(g);
+  for(let i=0;i<5;i++) line(20,Y_BOTTOM-i*LINE_GAP,width-10,Y_BOTTOM-i*LINE_GAP,W_STAFF);
+  staff.appendChild(mk("path",{d:CLEF_TREBLE,fill:INK,transform:`translate(46,${yFor(2)}) scale(${LINE_GAP})`}));
 
   let x=X0, gi=0, curX=X0;
   measures.forEach((mr,mi)=>{
@@ -216,10 +222,10 @@ function drawPhrase(){
       const steps=info(m).diatonic-E4, y=yFor(steps);
       const color = gi<idx ? DONE : INK;
       if(gi===idx){ curX=x; staff.appendChild(mk("circle",{cx:x,cy:y,r:15,fill:HALO})); }
-      for(let s=-2;s>=steps;s-=2) line(x-13,yFor(s),x+13,yFor(s),1.6);
-      for(let s=10;s<=steps;s+=2) line(x-13,yFor(s),x+13,yFor(s),1.6);
-      staff.appendChild(mk("ellipse",{cx:x,cy:y,rx:10,ry:7.5,transform:`rotate(-20 ${x} ${y})`,fill:color}));
-      const up=steps<4,sx=up?x+9:x-9; line(sx,y,sx,up?y-46:y+46,2.2,color);
+      for(let s=-2;s>=steps;s-=2) line(x-LEDGER_HALF,yFor(s),x+LEDGER_HALF,yFor(s),W_LEDGER,color);
+      for(let s=10;s<=steps;s+=2) line(x-LEDGER_HALF,yFor(s),x+LEDGER_HALF,yFor(s),W_LEDGER,color);
+      staff.appendChild(mk("ellipse",{cx:x,cy:y,rx:R_HEAD_X,ry:R_HEAD_Y,transform:`rotate(-20 ${x} ${y})`,fill:color}));
+      const up=steps<4,sx=up?x+(R_HEAD_X-W_STEM/2):x-(R_HEAD_X-W_STEM/2); line(sx,y,sx,up?y-L_STEM:y+L_STEM,W_STEM,color);
       if(!info(m).nat){ const sh=mk("text",{x:x-22,y:y+5,"font-size":18,fill:color});sh.textContent="♯";staff.appendChild(sh);}
       const jump = gi>0 && Math.abs(finger-phrase[gi-1][1])>=2;
       if(finger && (gi===0||showAll||jump)){
