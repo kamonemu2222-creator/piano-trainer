@@ -93,6 +93,7 @@
   #wheel .wk.sel{fill:var(--accent);}
   #wheel .wa.sel{fill:var(--accent); opacity:1;}
   .keyCap{font-size:11px; color:var(--text); letter-spacing:.06em; text-align:center; margin-top:2px;}
+  .rangeCap{font-size:10.5px; color:var(--muted); letter-spacing:.06em; margin-top:7px;}
   .keyCap span{color:var(--muted);}
   .cap{font-size:10.5px; color:var(--muted); letter-spacing:.16em; margin-top:12px;}
   .flash{position:absolute; pointer-events:none; white-space:nowrap; color:var(--ink);
@@ -217,6 +218,14 @@
           <button data-r="wide">2オクターブ</button>
         </div>
       </div>
+      <div class="field hidden" id="tonicField">
+        <label>音域の基準</label>
+        <div class="seg" id="tonicSeg">
+          <button data-b="tonic" class="on">主音〜主音</button>
+          <button data-b="c">ド〜ド</button>
+        </div>
+        <div class="rangeCap" id="rangeCap"></div>
+      </div>
     </div>
 
     <details class="col col-opt">
@@ -263,7 +272,7 @@
 
 <div class="card">
   <div class="timerbar" id="timerbar"><i id="timerFill"></i></div>
-  <div class="paper" id="paper"><svg id="staff" viewBox="0 0 440 176" aria-label="staff"></svg>
+  <div class="paper" id="paper"><svg id="staff" viewBox="0 0 440 184" aria-label="staff"></svg>
     <div class="flash" id="flash" aria-live="polite"></div></div>
   <div class="cap" id="clefCap"></div>
   <div class="feedback" id="feedback"></div>
@@ -344,20 +353,20 @@ const SIG_DIA={
   bass  :{ "#":[24,21,25,22,19,23,20], "b":[20,23,19,22,18,21,17] }
 };
 const KEY_SLOTS=[                     // 五度圏。上から時計回りに♯が増える
-  [{n:"ハ長調",  t:"C", a:0,s:"#"}],
-  [{n:"ト長調",  t:"G", a:1,s:"#"}],
-  [{n:"ニ長調",  t:"D", a:2,s:"#"}],
-  [{n:"イ長調",  t:"A", a:3,s:"#"}],
-  [{n:"ホ長調",  t:"E", a:4,s:"#"}],
-  [{n:"ロ長調",  t:"B", a:5,s:"#"}],
-  [{n:"嬰ヘ長調",t:"F♯",a:6,s:"#"},{n:"変ト長調",t:"G♭",a:6,s:"b"}],  // 同じ鍵盤の2択
-  [{n:"変ニ長調",t:"D♭",a:5,s:"b"}],
-  [{n:"変イ長調",t:"A♭",a:4,s:"b"}],
-  [{n:"変ホ長調",t:"E♭",a:3,s:"b"}],
-  [{n:"変ロ長調",t:"B♭",a:2,s:"b"}],
-  [{n:"ヘ長調",  t:"F", a:1,s:"b"}],
+  [{n:"ハ長調",  t:"C", pc:0, a:0,s:"#"}],
+  [{n:"ト長調",  t:"G", pc:7, a:1,s:"#"}],
+  [{n:"ニ長調",  t:"D", pc:2, a:2,s:"#"}],
+  [{n:"イ長調",  t:"A", pc:9, a:3,s:"#"}],
+  [{n:"ホ長調",  t:"E", pc:4, a:4,s:"#"}],
+  [{n:"ロ長調",  t:"B", pc:11,a:5,s:"#"}],
+  [{n:"嬰ヘ長調",t:"F♯",pc:6, a:6,s:"#"},{n:"変ト長調",t:"G♭",pc:6,a:6,s:"b"}],  // 同じ鍵盤の2択
+  [{n:"変ニ長調",t:"D♭",pc:1, a:5,s:"b"}],
+  [{n:"変イ長調",t:"A♭",pc:8, a:4,s:"b"}],
+  [{n:"変ホ長調",t:"E♭",pc:3, a:3,s:"b"}],
+  [{n:"変ロ長調",t:"B♭",pc:10,a:2,s:"b"}],
+  [{n:"ヘ長調",  t:"F", pc:5, a:1,s:"b"}],
 ];
-let keySlot=0, keySub=0;
+let keySlot=0, keySub=0, tonicBase="tonic";   // "c"=ド〜ド / "tonic"=主音〜主音
 const curKey=()=>KEY_SLOTS[keySlot][Math.min(keySub,KEY_SLOTS[keySlot].length-1)];
 function keyAlters(k){
   const a=[0,0,0,0,0,0,0], ord=k.s==="#"?SHARP_ORDER:FLAT_ORDER;
@@ -367,6 +376,27 @@ function keyAlters(k){
 /* 調号を使うのは「画面の鍵盤」で「ランダム出題」のときだけ */
 const keyActive=()=> quizMode==="random" && method==="piano";
 const activeAlters=()=> keyActive() ? keyAlters(curKey()) : [0,0,0,0,0,0,0];
+
+/* 音域を主音から主音にとる。
+   「ド〜ド」だと調によっては上端の音が音域から外れて7音になるが、
+   主音から主音にすれば、どの調でもちょうど1オクターブ（8音）そろう。
+   五線からはみ出さない範囲で、元の音域にいちばん近いオクターブを選ぶ。 */
+function fitsRangeOnStaff(lo,hi,clef,alters){
+  const ns=scaleNotes(lo,hi,alters);
+  return ns.length>0 && ns.every(n=>{ const st=n.dia-CLEF_BOTTOM[clef];
+    return st>=STEP_MIN && st<=STEP_MAX; });
+}
+function keyRange(clef,range){
+  const [lo,hi]=RANGE_MIDI[clef][range];
+  if(!keyActive() || tonicBase!=="tonic") return [lo,hi];
+  const span=hi-lo, alters=activeAlters(), pc=curKey().pc;
+  const cands=[];
+  for(let t=pc; t<=110; t+=12) if(t>=12) cands.push(t);
+  // 元の音域に近い順。下にずれる候補は少し不利にして、低くなりすぎるのを避ける
+  cands.sort((a,b)=>(Math.abs(a-lo)+(a<lo?3:0))-(Math.abs(b-lo)+(b<lo?3:0)));
+  for(const t of cands) if(fitsRangeOnStaff(t,t+span,clef,alters)) return [t,t+span];
+  return [lo,hi];
+}
 
 // 記号×範囲ごとの出題プール
 const RANGE_MIDI={
@@ -406,7 +436,7 @@ const songList=()=> (typeof window!=="undefined" && window.SONGS) ? window.SONGS
 /* ---------- 五線描画 ---------- */
 const NS="http://www.w3.org/2000/svg", staff=document.getElementById("staff");
 const INK="#1c1e26";
-const LINE_GAP=16, X_LEFT=44, X_RIGHT=420, X_NOTE=250, Y_BOTTOM=120;
+const LINE_GAP=16, X_LEFT=44, X_RIGHT=420, X_NOTE=250, Y_BOTTOM=128;
 /* 彫版の標準比率（線間=1として）：五線0.13 / 加線0.16 / 符幹0.12・長さ3.5 / 符頭幅1.18・高さ1.0 */
 const W_STAFF=LINE_GAP*0.13, W_LEDGER=LINE_GAP*0.16, W_STEM=LINE_GAP*0.12,
       L_STEM =LINE_GAP*3.5,  R_HEAD_X=9.6, R_HEAD_Y=7.8, LEDGER_HALF=LINE_GAP*0.99;
@@ -495,7 +525,7 @@ function showMsg(text,color,ms){
 const isMilestone=n=> n===5 || n===10 || (n>10 && n%10===0);
 
 /* 五線に描ける範囲（加線が多すぎて枠から出ないところまで） */
-const STEP_MIN=-6, STEP_MAX=13;
+const STEP_MIN=-6, STEP_MAX=14;
 const stepsOf=(midi,clef)=>midiInfo(midi).diatonic-CLEF_BOTTOM[clef];
 function fitsStaff(notes,clef,shift){
   return notes.every(n=>{ const st=stepsOf(n.midi+shift,clef); return st>=STEP_MIN && st<=STEP_MAX; });
@@ -521,7 +551,7 @@ function buildPools(){
   combined=[]; bag=[];
   if(quizMode==="song"){ buildSong(); return; }
   clefs.forEach(c=>{
-    const [lo,hi]=RANGE_MIDI[c][rangeMode];
+    const [lo,hi]=keyRange(c,rangeMode);
     scaleNotes(lo,hi,activeAlters())
       .forEach(n=>combined.push({midi:n.midi, clef:c, diatonic:n.dia, alter:n.alter}));
   });
@@ -855,6 +885,7 @@ function refreshSetup(){
   buildPools();
   if(method==="piano") buildPiano();
   if(!running) drawStaff(clefMode==="bass"?"bass":"treble");   // 調号の変更を待機中も反映
+  syncRangeCap();
 }
 segHandler("methodSeg",d=>{ method=d.m;
   syncModeUI();
@@ -905,6 +936,7 @@ function syncWheel(){
   const ch=alt.map((a,i)=>a? DIA_SOLFEGE[i]+(a>0?"♯":"♭") : null).filter(Boolean);
   el("keyCap").innerHTML = k.n + (k.a ? "　<span>"+(k.s==="#"?"♯":"♭")+k.a+"："+ch.join("・")+"</span>"
                                       : "　<span>調号なし</span>");
+  syncRangeCap();
 }
 function pickSlotFromPoint(ev){
   const r=el("wheel").getBoundingClientRect();
@@ -929,6 +961,18 @@ function pickSlotFromPoint(ev){
   ["pointerup","pointercancel"].forEach(ev=>w.addEventListener(ev,()=>{dragging=false;}));
 })();
 
+function syncRangeCap(){
+  if(!keyActive()){ el("rangeCap").textContent=""; return; }
+  const clefs = clefMode==="both" ? ["treble","bass"] : [clefMode];
+  const txt=clefs.map(c=>{
+    const [lo,hi]=keyRange(c,rangeMode), ns=scaleNotes(lo,hi,activeAlters());
+    if(!ns.length) return "";
+    const a=noteName(ns[0].dia,ns[0].alter), b=noteName(ns[ns.length-1].dia,ns[ns.length-1].alter);
+    return a.solfege+Math.floor(ns[0].dia/7)+"〜"+b.solfege+Math.floor(ns[ns.length-1].dia/7)
+           +"（"+ns.length+"音）";
+  }).filter(Boolean).join("　/　");
+  el("rangeCap").textContent=txt;
+}
 function syncModeUI(){
   const song = quizMode==="song";
   el("songField").classList.toggle("hidden",!song);
@@ -936,9 +980,12 @@ function syncModeUI(){
   el("timeField").classList.toggle("hidden",song);
   el("shuffleField").classList.toggle("hidden",!song);
   el("keyField").classList.toggle("hidden",!keyActive());
+  el("tonicField").classList.toggle("hidden",!keyActive());
+  syncRangeCap();
 }
 segHandler("modeSeg",d=>{ quizMode=d.q; syncModeUI(); updateHint(); refreshSetup(); });
 segHandler("octSeg",d=>{ octVary=(d.o==="vary"); refreshSetup(); });
+segHandler("tonicSeg",d=>{ tonicBase=d.b; refreshSetup(); });
 el("songSel").addEventListener("change",e=>{ songIdx=parseInt(e.target.value,10)||0;
   if(running) endGame(); refreshSetup(); });
 segHandler("clefSeg",d=>{ clefMode=d.c; refreshSetup(); });
