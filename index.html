@@ -6,110 +6,185 @@
 <title>楽譜トレーナー</title>
 <style>
   :root{
-    --bg:#12131a; --panel:#1e2030; --accent:#7c9cff; --accent2:#ff9ecb;
-    --ok:#5ee6a0; --ng:#ff6b7a; --text:#eef0ff; --muted:#9aa0c0;
+    --bg:#0e1014; --panel:#161920; --sunken:#11141a; --line:rgba(255,255,255,.085);
+    --text:#e9eaef; --muted:#8d92a3; --accent:#c9a962; --accent-ink:#15171c;
+    --ok:#7fbd97; --ng:#cf7b78; --paper:#f6f3ea; --ink:#1c1e26;
+    --serif:"Hiragino Mincho ProN","Yu Mincho",YuMincho,"Noto Serif JP",serif;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  body{margin:0; font-family:-apple-system,"Hiragino Kaku Gothic ProN",system-ui,sans-serif;
-       background:var(--bg); color:var(--text); text-align:center; padding:12px; user-select:none;}
-  h1{font-size:20px; margin:6px 0 10px; letter-spacing:.04em;}
-  .card{background:var(--panel); border-radius:16px; padding:14px; margin:0 auto 12px; max-width:560px;
-        box-shadow:0 6px 24px rgba(0,0,0,.35);}
-  .ctrls{display:grid; gap:8px;}
-  .ctrlrow{display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap;}
-  .lbl{font-size:11px; color:var(--muted); width:52px; text-align:right;}
-  .seg{display:inline-flex; background:#0d0e16; border-radius:12px; padding:4px; flex-wrap:wrap;}
-  .seg button{background:transparent; color:var(--muted); border:0; padding:8px 12px; border-radius:9px;
-              font-size:13px; font-weight:600;}
-  .seg button.on{background:var(--accent); color:#0d0e16;}
-  .bigbtn{background:var(--accent2); color:#1a0e16; border:0; border-radius:12px; padding:12px 22px;
-          font-size:16px; font-weight:800; margin-top:8px;}
-  .stats{display:flex; justify-content:space-around; margin:10px 0 2px; font-variant-numeric:tabular-nums;}
-  .stats div span{display:block; font-size:22px; font-weight:800;}
-  .stats div small{color:var(--muted); font-size:11px;}
-  svg{display:block; margin:6px auto; width:100%; max-width:440px; height:210px;}
-  .cap{font-size:12px; color:var(--muted); margin-top:-4px;}
-  .feedback{height:26px; font-size:18px; font-weight:800; margin:4px;}
-  .keys{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; max-width:560px; margin:0 auto;}
-  .keys button{padding:16px 0; font-size:18px; font-weight:800; border:0; border-radius:12px;
-               background:#2a2d44; color:var(--text);}
-  .keys button small{display:block; font-size:11px; color:var(--muted); font-weight:600;}
-  .keys button:active{background:var(--accent); color:#0d0e16;}
-  /* piano */
-  .pianoWrap{overflow-x:auto; padding:6px 0;}
-  .piano{position:relative; height:150px; margin:0 auto; display:inline-block;}
-  .wkey{position:absolute; top:0; width:42px; height:150px; background:#f3f4ff; border:1px solid #3a3d55;
-        border-radius:0 0 6px 6px; color:#556; font-size:10px; display:flex; align-items:flex-end;
-        justify-content:center; padding-bottom:6px; font-weight:700;}
-  .wkey:active{background:var(--accent);}
-  .bkey{position:absolute; top:0; width:26px; height:95px; background:#181a26; border:1px solid #000;
-        border-radius:0 0 5px 5px; z-index:2;}
+  body{margin:0; padding:22px 14px 44px; background:var(--bg); color:var(--text);
+       font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+       text-align:center; user-select:none; -webkit-font-smoothing:antialiased;}
+
+  header{max-width:600px; margin:0 auto 20px;}
+  h1{font-family:var(--serif); font-size:25px; font-weight:600; letter-spacing:.2em;
+     margin:0 0 8px; text-indent:.2em;}
+  .tagline{font-size:10.5px; color:var(--muted); letter-spacing:.2em;}
+  .nav{margin-top:14px; font-size:12px;}
+  .nav a{color:var(--muted); text-decoration:none; border-bottom:1px solid var(--line); padding-bottom:3px;}
+  .nav a:hover{color:var(--accent); border-color:var(--accent);}
+
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px;
+        margin:0 auto 14px; max-width:600px; box-shadow:0 12px 32px rgba(0,0,0,.34);}
+
+  /* ---- 設定 ---- */
+  .settings{display:grid; grid-template-columns:1fr 1fr; text-align:left;}
+  .settings .full{grid-column:1/-1; padding-bottom:18px; margin-bottom:18px; border-bottom:1px solid var(--line);}
+  .col{padding:0 20px;}
+  .col:first-of-type{padding-left:0;}
+  .col:last-of-type{padding-right:0; border-left:1px solid var(--line);}
+  .col>h2{font-size:9.5px; letter-spacing:.2em; color:var(--muted); font-weight:600; margin:0 0 14px;}
+  .field+.field{margin-top:14px;}
+  .field>label{display:block; font-size:11px; color:var(--muted); letter-spacing:.1em; margin-bottom:7px;}
+
+  .seg{display:inline-flex; background:var(--sunken); border:1px solid var(--line);
+       border-radius:10px; padding:3px; flex-wrap:wrap; gap:2px;}
+  .seg button{background:transparent; color:var(--muted); border:0; border-radius:8px;
+              padding:7px 12px; font-size:12.5px; font-weight:600; letter-spacing:.03em;
+              font-family:inherit; transition:background .15s, color .15s;}
+  .seg button:hover{color:var(--text);}
+  .seg button.on{background:var(--accent); color:var(--accent-ink);}
+
+  .stats{display:flex; justify-content:center; gap:38px; margin:20px 0 16px;
+         padding-top:18px; border-top:1px solid var(--line);}
+  .stats div span{display:block; font-family:var(--serif); font-size:27px; font-weight:600;
+                  line-height:1.1; font-variant-numeric:tabular-nums;}
+  .stats div small{display:block; margin-top:5px; font-size:9.5px; color:var(--muted); letter-spacing:.16em;}
+  .bigbtn{width:100%; max-width:280px; background:var(--accent); color:var(--accent-ink); border:0;
+          border-radius:10px; padding:13px 0; font-size:13.5px; font-weight:700;
+          letter-spacing:.18em; font-family:inherit; text-indent:.18em;}
+  .bigbtn:hover{filter:brightness(1.07);}
+
+  /* ---- 譜面（紙の質感） ---- */
+  .paper{background:var(--paper); border-radius:10px; padding:10px 6px 6px;
+         box-shadow:inset 0 0 0 1px rgba(0,0,0,.07), 0 1px 0 rgba(255,255,255,.04);}
+  svg{display:block; margin:0 auto; width:100%; max-width:440px; height:auto;}
+  .cap{font-size:10.5px; color:var(--muted); letter-spacing:.16em; margin-top:12px;}
+  .feedback{height:22px; font-size:13px; font-weight:700; letter-spacing:.12em; margin:10px 0 2px;}
+
+  .weak{display:flex; flex-wrap:wrap; gap:6px; justify-content:center; align-items:center;
+        font-size:11px; color:var(--muted); margin-top:10px; min-height:0;}
+  .weak .lb{letter-spacing:.14em;}
+  .chip{border:1px solid var(--line); border-radius:999px; padding:3px 11px; color:var(--text);}
+  .chip.hot{border-color:var(--accent); color:var(--accent);}
+  .weak button{background:transparent; border:1px solid var(--line); color:var(--muted);
+               border-radius:999px; padding:3px 11px; font-size:10.5px; font-family:inherit;}
+  .weak button:hover{color:var(--text);}
+
+  /* ---- 回答パネル ---- */
+  .keys{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-top:16px;}
+  .keys button{padding:14px 0; border:1px solid var(--line); border-radius:10px; background:var(--sunken);
+               color:var(--text); font-size:15px; font-weight:600; font-family:inherit;}
+  .keys button small{display:block; margin-top:4px; font-size:9.5px; color:var(--muted);
+                     font-weight:500; letter-spacing:.14em;}
+  .keys button:active{background:var(--accent); color:var(--accent-ink);}
+  .keys button:active small{color:var(--accent-ink);}
+
+  .pianoWrap{overflow-x:auto; padding:8px 0; margin-top:16px;}
+  .piano{position:relative; height:148px; margin:0 auto; display:inline-block;}
+  .wkey{position:absolute; top:0; width:42px; height:148px; background:var(--paper);
+        border:1px solid #c6c0b1; border-radius:0 0 5px 5px; color:#8d8879; font-size:9.5px;
+        display:flex; align-items:flex-end; justify-content:center; padding-bottom:7px;
+        font-weight:700; letter-spacing:.06em;}
+  .wkey:active{background:var(--accent); color:var(--accent-ink);}
+  .bkey{position:absolute; top:0; width:26px; height:93px; background:#1c1e26; border:1px solid #07080b;
+        border-radius:0 0 4px 4px; z-index:2;}
   .bkey:active{background:var(--accent);}
-  .kbscroll{-webkit-appearance:none;appearance:none;display:block;width:100%;max-width:460px;height:12px;border-radius:7px;background:#2a2d44;margin:12px auto 2px;}
-  .kbscroll::-webkit-slider-thumb{-webkit-appearance:none;width:52px;height:30px;border-radius:9px;background:var(--accent);border:2px solid #0d0e16;}
-  .kbscroll::-moz-range-thumb{width:52px;height:30px;border-radius:9px;background:var(--accent);border:2px solid #0d0e16;}
-  .kbcap{font-size:11px;color:var(--muted);}
-  .listen{font-size:14px; color:var(--muted); min-height:24px;}
-  .detected{font-size:26px; font-weight:800; color:var(--accent);}
+  .kbscroll{-webkit-appearance:none; appearance:none; display:block; width:100%; max-width:440px;
+            height:6px; border-radius:3px; background:var(--sunken); border:1px solid var(--line);
+            margin:10px auto 2px;}
+  .kbscroll::-webkit-slider-thumb{-webkit-appearance:none; width:56px; height:22px; border-radius:11px;
+            background:var(--accent); border:2px solid var(--panel);}
+  .kbscroll::-moz-range-thumb{width:56px; height:22px; border-radius:11px;
+            background:var(--accent); border:2px solid var(--panel);}
+  .kbcap{font-size:10.5px; color:var(--muted); letter-spacing:.1em; margin-top:4px;}
+
+  .listen{font-size:12.5px; color:var(--muted); min-height:22px; margin-top:16px; letter-spacing:.04em;}
+  .detected{font-family:var(--serif); font-size:26px; font-weight:600; color:var(--accent); margin-top:6px;}
+
   .hidden{display:none;}
-  .hint{color:var(--muted); font-size:12px; line-height:1.5; max-width:560px; margin:8px auto;}
-  .weak{font-size:12px; color:var(--muted); line-height:1.9; margin:2px auto 4px; max-width:520px;}
-  .weak b{color:var(--accent2); font-weight:800;}
-  .weak button{background:#2a2d44; color:var(--muted); border:0; border-radius:8px;
-               padding:3px 9px; font-size:11px; margin-left:6px;}
+  .hint{max-width:600px; margin:18px auto 0; color:var(--muted); font-size:11.5px;
+        line-height:1.95; text-align:left;}
+  .hint b{color:var(--text); font-weight:600;}
+  .hint p{margin:0 0 8px;}
+  .hint p:last-child{margin:0;}
+
+  @media(max-width:540px){
+    .settings{grid-template-columns:1fr;}
+    .col{padding:0;}
+    .col:last-of-type{border-left:0; border-top:1px solid var(--line); margin-top:18px; padding-top:18px;}
+    .stats{gap:26px;}
+  }
 </style>
 </head>
 <body>
-<h1>🎹 楽譜トレーナー</h1>
-<div style="font-size:12px;margin-bottom:10px;"><a href="phrase.html" style="color:#7c9cff;">🎼 曲れんしゅう（PCキーボードで弾く）へ →</a></div>
+<header>
+  <h1>楽譜トレーナー</h1>
+  <div class="tagline">SIGHT-READING PRACTICE</div>
+  <div class="nav"><a href="phrase.html">フレーズ練習（PCキーボードで演奏）へ</a></div>
+</header>
 
 <div class="card">
-  <div class="ctrls">
-    <div class="ctrlrow"><span class="lbl">こたえ方</span>
+  <div class="settings">
+    <div class="full field">
+      <label>回答方法</label>
       <div class="seg" id="methodSeg">
         <button data-m="name" class="on">音名ボタン</button>
         <button data-m="piano">画面の鍵盤</button>
-        <button data-m="mic">マイクで演奏</button>
+        <button data-m="mic">マイク入力</button>
       </div>
     </div>
-    <div class="ctrlrow"><span class="lbl">記号</span>
-      <div class="seg" id="clefSeg">
-        <button data-c="treble" class="on">ト音</button>
-        <button data-c="bass">ヘ音</button>
-        <button data-c="both">混合</button>
+
+    <div class="col">
+      <h2>出題</h2>
+      <div class="field">
+        <label>音部記号</label>
+        <div class="seg" id="clefSeg">
+          <button data-c="treble" class="on">ト音</button>
+          <button data-c="bass">ヘ音</button>
+          <button data-c="both">混合</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>音域</label>
+        <div class="seg" id="rangeSeg">
+          <button data-r="narrow" class="on">1オクターブ</button>
+          <button data-r="wide">2オクターブ</button>
+        </div>
       </div>
     </div>
-    <div class="ctrlrow"><span class="lbl">範囲</span>
-      <div class="seg" id="rangeSeg">
-        <button data-r="narrow" class="on">せまい(1オクターブ)</button>
-        <button data-r="wide">ひろい</button>
+
+    <div class="col">
+      <h2>オプション</h2>
+      <div class="field">
+        <label>制限時間</label>
+        <div class="seg" id="timeSeg">
+          <button data-t="60" class="on">60秒</button>
+          <button data-t="90">90秒</button>
+          <button data-t="120">120秒</button>
+          <button data-t="0">なし</button>
+        </div>
       </div>
-    </div>
-    <div class="ctrlrow"><span class="lbl">じかん</span>
-      <div class="seg" id="timeSeg">
-        <button data-t="60" class="on">60秒</button>
-        <button data-t="90">90秒</button>
-        <button data-t="120">120秒</button>
-        <button data-t="0">無制限</button>
-      </div>
-    </div>
-    <div class="ctrlrow"><span class="lbl">苦手音</span>
-      <div class="seg" id="focusSeg">
-        <button data-f="on" class="on">多めに出す</button>
-        <button data-f="off">ふつう</button>
+      <div class="field">
+        <label>苦手音の出題</label>
+        <div class="seg" id="focusSeg">
+          <button data-f="on" class="on">重点的に</button>
+          <button data-f="off">均等に</button>
+        </div>
       </div>
     </div>
   </div>
+
   <div class="stats">
-    <div><span id="score">0</span><small>せいかい</small></div>
-    <div><span id="streak">0</span><small>れんぞく⭐</small></div>
-    <div><span id="time">60</span><small>のこり秒</small></div>
+    <div><span id="score">0</span><small>正解数</small></div>
+    <div><span id="streak">0</span><small>連続正解</small></div>
+    <div><span id="time">60</span><small>残り時間</small></div>
   </div>
-  <button class="bigbtn" id="startBtn">スタート</button>
+  <button class="bigbtn" id="startBtn">開始</button>
 </div>
 
 <div class="card">
-  <svg id="staff" viewBox="0 0 440 210" aria-label="staff"></svg>
+  <div class="paper"><svg id="staff" viewBox="0 0 440 176" aria-label="staff"></svg></div>
   <div class="cap" id="clefCap"></div>
   <div class="feedback" id="feedback"></div>
   <div class="weak" id="weak"></div>
@@ -126,12 +201,12 @@
 
   <div id="pianoPanel" class="hidden">
     <div class="pianoWrap" id="pianoScroll"><div class="piano" id="piano"></div></div>
-    <div class="kbcap">← 鍵盤を左右にスクロール →</div>
     <input type="range" id="kbScroll" class="kbscroll" min="0" max="100" value="0" aria-label="鍵盤をスクロール">
+    <div class="kbcap">鍵盤は左右にスクロールできます</div>
   </div>
 
   <div id="micPanel" class="hidden">
-    <div class="listen" id="listenMsg">スタートでマイク許可 → 表示の音符を鍵盤で弾いてください。</div>
+    <div class="listen" id="listenMsg">開始するとマイクの使用許可を求めます。表示された音符を楽器で演奏してください。</div>
     <div class="detected" id="detected">—</div>
   </div>
 </div>
@@ -164,9 +239,10 @@ function naturals(lo,hi){ const a=[]; for(let m=lo;m<=hi;m++) if(isNatural(m)) a
 
 /* ---------- 五線描画 ---------- */
 const NS="http://www.w3.org/2000/svg", staff=document.getElementById("staff");
+const INK="#1c1e26";
 const LINE_GAP=16, X_LEFT=44, X_RIGHT=420, X_NOTE=250, Y_BOTTOM=120;
 function clearSvg(){ while(staff.firstChild) staff.removeChild(staff.firstChild); }
-function line(x1,y1,x2,y2,w=1.6,color="#cfd4ff"){
+function line(x1,y1,x2,y2,w=1.4,color=INK){
   const l=document.createElementNS(NS,"line");
   l.setAttribute("x1",x1);l.setAttribute("y1",y1);l.setAttribute("x2",x2);l.setAttribute("y2",y2);
   l.setAttribute("stroke",color);l.setAttribute("stroke-width",w);staff.appendChild(l);
@@ -179,7 +255,7 @@ function drawStaff(clef){
   g.setAttribute("x",X_LEFT+2);
   g.setAttribute("y", clef==="treble"?Y_BOTTOM+8:Y_BOTTOM-1.4*LINE_GAP);
   g.setAttribute("font-size", clef==="treble"?"72":"48");
-  g.setAttribute("fill","#cfd4ff"); g.textContent=CLEF_GLYPH[clef]; staff.appendChild(g);
+  g.setAttribute("fill",INK); g.textContent=CLEF_GLYPH[clef]; staff.appendChild(g);
 }
 function drawNote(m,clef){
   drawStaff(clef);
@@ -189,9 +265,9 @@ function drawNote(m,clef){
   for(let s=10;s<=steps;s+=2) line(X_NOTE-16,yForSteps(s),X_NOTE+16,yForSteps(s),1.6);
   const head=document.createElementNS(NS,"ellipse");
   head.setAttribute("cx",X_NOTE);head.setAttribute("cy",y);head.setAttribute("rx",11);head.setAttribute("ry",8);
-  head.setAttribute("transform",`rotate(-20 ${X_NOTE} ${y})`);head.setAttribute("fill","#fff");staff.appendChild(head);
+  head.setAttribute("transform",`rotate(-20 ${X_NOTE} ${y})`);head.setAttribute("fill",INK);staff.appendChild(head);
   const up=steps<4, sx=up?X_NOTE+10:X_NOTE-10, sy2=up?y-52:y+52;
-  line(sx,y,sx,sy2,2.2,"#fff");
+  line(sx,y,sx,sy2,2,INK);
 }
 
 /* ---------- 状態 ---------- */
@@ -268,13 +344,13 @@ function newTarget(){
 function correct(){
   noteHit(answerKey(target));
   score++; streak++; setStats();
-  el("feedback").textContent="⭐ せいかい！"; el("feedback").style.color="var(--ok)";
+  el("feedback").textContent="正解"; el("feedback").style.color="var(--ok)";
   setTimeout(()=>{ el("feedback").textContent=""; if(running) newTarget(); },500);
 }
 function wrong(){
   noteMissed(answerKey(target));
   streak=0; setStats();
-  el("feedback").textContent="ちがうよ"; el("feedback").style.color="var(--ng)";
+  el("feedback").textContent="不正解"; el("feedback").style.color="var(--ng)";
   setTimeout(()=>{ el("feedback").textContent=""; },500);
 }
 
@@ -282,7 +358,7 @@ function startGame(){
   if(running){ endGame(); return; }
   buildPools(); prev=null; prevKey=null;
   score=0; streak=0; timeLeft=timeLimit; setStats(); running=true;
-  el("feedback").textContent=""; el("weak").innerHTML=""; el("startBtn").textContent="やめる";
+  el("feedback").textContent=""; el("weak").innerHTML=""; el("startBtn").textContent="中断";
   if(method==="piano") buildPiano();
   clearInterval(timerId);
   if(timeLimit>0) timerId=setInterval(()=>{ timeLeft--; setStats(); if(timeLeft<=0) endGame(); },1000);
@@ -291,9 +367,9 @@ function startGame(){
 }
 function endGame(){
   running=false; clearInterval(timerId); stopMic();
-  el("startBtn").textContent="スタート";
-  el("feedback").textContent=`しゅうりょう！ せいかい ${score}こ 🎉`;
-  el("feedback").style.color="var(--accent2)";
+  el("startBtn").textContent="開始";
+  el("feedback").textContent=`終了　正解 ${score} 問`;
+  el("feedback").style.color="var(--accent)";
   timeLeft=timeLimit; setStats(); renderWeak();
 }
 
@@ -308,8 +384,9 @@ function renderWeak(){
   const rows=Object.entries(miss).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,8);
   const w=el("weak");
   if(!rows.length){ w.innerHTML=""; return; }
-  w.innerHTML="いま苦手な音："+rows.map(([k,v])=>"<b>"+labelOfKey(k)+"</b>"+(v>=3?"🔥":"")).join("　")
-    +'<button id="weakReset">わすれる</button>';
+  w.innerHTML='<span class="lb">苦手な音</span>'
+    +rows.map(([k,v])=>'<span class="chip'+(v>=3?" hot":"")+'">'+labelOfKey(k)+'</span>').join("")
+    +'<button id="weakReset">記録を消去</button>';
   el("weakReset").addEventListener("click",()=>{ miss={}; saveMiss(); renderWeak(); });
 }
 
@@ -366,8 +443,8 @@ async function startMic(){
     const src=audioCtx.createMediaStreamSource(micStream);
     analyser=audioCtx.createAnalyser(); analyser.fftSize=2048; src.connect(analyser);
     buf=new Float32Array(analyser.fftSize);
-    el("listenMsg").textContent="🎤 聞いてます… 音符の音を弾いてね"; detectLoop();
-  }catch(err){ el("listenMsg").textContent="マイク不可: "+err.message+"（http://localhost かhttpsで開いてください）"; }
+    el("listenMsg").textContent="音を検出しています。表示された音符を演奏してください。"; detectLoop();
+  }catch(err){ el("listenMsg").textContent="マイクを使用できません（"+err.message+"）。https または http://localhost で開いてください。"; }
 }
 function stopMic(){
   if(rafId) cancelAnimationFrame(rafId);
@@ -427,11 +504,11 @@ segHandler("timeSeg",d=>{ timeLimit=parseInt(d.t,10); timeLeft=timeLimit; setSta
 segHandler("focusSeg",d=>{ focusWeak=(d.f==="on"); refreshSetup(); });
 function updateHint(){
   const map={
-    name:"音名ボタン：出た音符が「ドレミ…」のどれかをタップ。オクターブは不問。速読ドリル向き。",
-    piano:"画面の鍵盤：出た音符と<b>同じ高さの鍵</b>をタップ（オクターブも合わせる）。左端にドの位置(C4など)を表示。",
-    mic:"マイクで演奏：出た音符を PSR-E283 で弾く。マイクが判定。※<b>http://localhost</b> かhttpsで開いたときだけ使えます。"
+    name:"表示された音符の<b>音名</b>を選びます。オクターブは問いません。読む速度を上げる練習に向いています。",
+    piano:"表示された音符と<b>同じ高さの鍵盤</b>を選びます（オクターブも一致させてください）。Cの鍵盤に音名を表示しています。",
+    mic:"表示された音符を実際の楽器で演奏し、マイクで判定します。※<b>https</b> または <b>http://localhost</b> で開いた場合のみ利用できます。"
   };
-  el("hint").innerHTML=map[method]+"<br>出題は全部の音が1周で1回ずつ回る山札方式。<b>苦手音「多めに出す」</b>のときは、まちがえた音が1周に2〜3回まわってきます（せいかいすると自然に減ります）。記録はこの端末に保存されます。";
+  el("hint").innerHTML="<p>"+map[method]+"</p><p>出題は<b>すべての音が一巡するまで重複しない</b>方式です。苦手音の出題を「重点的に」にすると、間違えた音が一巡あたり2〜3回出題され、正解を重ねると通常の頻度に戻ります。苦手音の記録はこの端末に保存されます。</p>";
 }
 
 /* ---------- init ---------- */
