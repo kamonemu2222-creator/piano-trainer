@@ -84,9 +84,9 @@
   svg{display:block; margin:0 auto; width:100%; max-width:440px; height:auto;}
   .cap{font-size:10.5px; color:var(--muted); letter-spacing:.16em; margin-top:12px;}
   .feedback{height:22px; font-size:13px; font-weight:700; letter-spacing:.12em; margin:10px 0 2px;}
-  #staff .note{transition:opacity .21s ease, transform .21s ease;}
-  #staff .note.in{opacity:0; transform:translateY(7px);}
-  #staff .note.out{opacity:0; transform:translateY(-7px);}
+  #staff .note{transition:opacity .14s ease, transform .14s ease;}
+  #staff .note.in{opacity:0; transform:translateY(5px);}
+  #staff .note.out{opacity:0; transform:translateY(-5px);}
   @keyframes staffShake{
     0%{transform:translateX(0)} 16%{transform:translateX(-6px)} 32%{transform:translateX(5px)}
     48%{transform:translateX(-3px)} 66%{transform:translateX(2px)} 100%{transform:translateX(0)}}
@@ -408,13 +408,14 @@ function newTarget(animate){
   if(method==="mic") el("detected").textContent="—";
 }
 
+const SWAP_MS=120;   // 正解してから次の音符が出るまで（CSSの .note の transition と揃える）
 function correct(){
   playChord(target.midi);
   noteHit(answerKey(target));
   score++; streak++; setStats();
   if(noteG) noteG.classList.add("out");
   if(isMilestone(streak)) showMsg(streak+" 連続","var(--accent)",1100);
-  setTimeout(()=>{ if(running) newTarget(true); },170);
+  setTimeout(()=>{ if(running) newTarget(true); },SWAP_MS);
 }
 function wrong(chosenMidi){
   if(chosenMidi!=null) playMiss(chosenMidi);
