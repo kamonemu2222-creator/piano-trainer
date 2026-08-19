@@ -84,7 +84,16 @@
   /* ---- 譜面（紙の質感） ---- */
   .paper{position:relative; background:var(--paper); border-radius:10px; padding:10px 6px 6px;
          box-shadow:inset 0 0 0 1px rgba(0,0,0,.07), 0 1px 0 rgba(255,255,255,.04);}
-  svg{display:block; margin:0 auto; width:100%; max-width:440px; height:auto;}
+  #staff{display:block; margin:0 auto; width:100%; max-width:440px; height:auto;}
+  #wheel{display:block; margin:2px auto 0; width:100%; max-width:250px; height:auto; touch-action:none;}
+  #wheel .wk{fill:var(--muted); font-size:12.5px; font-weight:700; cursor:pointer;
+             font-family:-apple-system,"Hiragino Kaku Gothic ProN",system-ui,sans-serif;}
+  #wheel .wa{fill:var(--muted); font-size:8.5px; opacity:.62; cursor:pointer;
+             font-family:inherit;}
+  #wheel .wk.sel{fill:var(--accent);}
+  #wheel .wa.sel{fill:var(--accent); opacity:1;}
+  .keyCap{font-size:11px; color:var(--text); letter-spacing:.06em; text-align:center; margin-top:2px;}
+  .keyCap span{color:var(--muted);}
   .cap{font-size:10.5px; color:var(--muted); letter-spacing:.16em; margin-top:12px;}
   .flash{position:absolute; pointer-events:none; white-space:nowrap; color:var(--ink);
          font-size:13px; font-weight:700; letter-spacing:.02em; opacity:0;
@@ -188,6 +197,11 @@
         <label>曲</label>
         <select id="songSel"></select>
       </div>
+      <div class="field hidden" id="keyField">
+        <label>調（スケール）</label>
+        <svg id="wheel" viewBox="0 0 230 250" aria-label="五度圏"></svg>
+        <div class="keyCap" id="keyCap"></div>
+      </div>
       <div class="field">
         <label>音部記号</label>
         <div class="seg" id="clefSeg">
@@ -287,6 +301,19 @@ const PC_TO_SOLFEGE={0:"ド",2:"レ",4:"ミ",5:"ファ",7:"ソ",9:"ラ",11:"シ"
 const LETTER_INDEX={C:0,D:1,E:2,F:3,G:4,A:5,B:6};
 const isNatural=m=>PC_TO_LETTER[((m%12)+12)%12]!==undefined;
 
+/* ♯♭が入ると、MIDI番号だけでは音符を五線のどこに置くか決まらない（ファ♯とソ♭は同じ音）。
+   そこで音を「五線上の位置 dia ＋ 変化量 alter」で持ち、鳴らす高さはそこから計算する。 */
+const DIA_PC=[0,2,4,5,7,9,11], DIA_LETTER=["C","D","E","F","G","A","B"],
+      DIA_SOLFEGE=["ド","レ","ミ","ファ","ソ","ラ","シ"];
+const diaMidi=(dia,alter)=>{ const o=Math.floor(dia/7), li=((dia%7)+7)%7;
+  return (o+1)*12+DIA_PC[li]+(alter||0); };
+function noteName(dia,alter){
+  const o=Math.floor(dia/7), li=((dia%7)+7)%7, mk=alter>0?"♯":(alter<0?"♭":"");
+  return {letter:DIA_LETTER[li]+mk+o, solfege:DIA_SOLFEGE[li]+mk};
+}
+/* 苦手音リスト用。黒鍵は♯で読む（記録はMIDIなので綴りまでは復元できない） */
+const CHROM_SOLFEGE=["ド","ド♯","レ","レ♯","ミ","ファ","ファ♯","ソ","ソ♯","ラ","ラ♯","シ"];
+
 function midiInfo(m){
   const pc=((m%12)+12)%12, octave=Math.floor(m/12)-1, letter=PC_TO_LETTER[pc];
   const diatonic=letter!==undefined ? octave*7+LETTER_INDEX[letter] : null;
@@ -304,12 +331,59 @@ const CLEF_REF={treble:2, bass:6};   // 基準線の位置（下線からの半�
 const CLEF_DX ={treble:6, bass:6};   // 五線の左端からの距離
 const CLEF_NAME ={treble:"ト音記号", bass:"ヘ音記号"};
 
-// 記号×範囲ごとの出題プール（ナチュラルのみ）
+/* ---------- 調 ----------
+   ♯は ファ ド ソ レ ラ ミ シ、♭は シ ミ ラ レ ソ ド ファ の順につく。
+   調号を五線のどの高さに書くかは記号ごとに決まっているので、位置を表で持つ。 */
+const ACC_PATH={
+ sharp:"M.95 -.47C.98 -.48 1 -.52 1 -.54V-.82C1 -.84 .98 -.86 .97 -.86C.96 -.86 .96 -.86 .95 -.85C.95 -.85 .87 -.82 .85 -.82C.82 -.82 .79 -.84 .79 -.87V-1.36C.79 -1.38 .77 -1.4 .74 -1.4C.7 -1.4 .67 -1.38 .67 -1.36V-.84C.67 -.8 .66 -.74 .62 -.72C.57 -.69 .44 -.64 .37 -.62C.33 -.62 .32 -.67 .32 -.7V-1.18C.32 -1.2 .29 -1.22 .26 -1.22C.22 -1.22 .2 -1.2 .2 -1.18V-.64C.2 -.58 .18 -.54 .15 -.53C.13 -.52 .05 -.49 .05 -.49C.02 -.48 0 -.45 0 -.42V-.14C0 -.12 .01 -.1 .03 -.1C.04 -.1 .04 -.11 .05 -.11C.05 -.11 .11 -.13 .14 -.15C.14 -.15 .14 -.15 .15 -.15C.18 -.15 .2 -.11 .2 -.08V.32C.2 .36 .18 .4 .16 .41C.13 .42 .05 .45 .05 .45C.02 .46 0 .49 0 .52V.8C0 .82 .01 .84 .03 .84C.04 .84 .04 .83 .05 .83C.05 .83 .1 .81 .14 .8C.14 .79 .15 .79 .15 .79C.18 .79 .2 .84 .2 .86V1.35C.2 1.37 .22 1.39 .25 1.39C.29 1.39 .32 1.37 .32 1.35V.79C.32 .74 .34 .71 .36 .7L.6 .6C.61 .6 .62 .6 .62 .6C.65 .6 .67 .65 .67 .67V1.17C.67 1.2 .7 1.22 .72 1.22C.77 1.22 .79 1.2 .79 1.17V.6C.79 .57 .81 .52 .84 .51C.86 .5 .95 .47 .95 .47C.98 .46 1 .42 1 .4V.12C1 .1 .98 .08 .97 .08C.96 .08 .96 .08 .95 .09L.84 .13C.82 .13 .79 .1 .79 .06V-.32C.79 -.34 .81 -.42 .84 -.43ZM.67 .18C.65 .26 .46 .34 .37 .34C.34 .34 .32 .33 .32 .32C.31 .3 .31 .22 .31 .12C.31 -0 .31 -.14 .32 -.18C.33 -.24 .51 -.33 .61 -.33C.64 -.33 .66 -.32 .67 -.3C.68 -.28 .69 -.18 .69 -.08C.69 .03 .68 .14 .67 .18Z",
+ flat:"M.05 .68C.06 .7 .07 .7 .08 .7C.1 .7 .11 .69 .11 .69C.23 .62 .32 .52 .42 .45C.78 .2 .9 -.04 .9 -.23C.9 -.46 .73 -.6 .54 -.61C.52 -.61 .49 -.61 .46 -.6C.42 -.59 .37 -.57 .32 -.54C.3 -.52 .26 -.49 .24 -.49C.23 -.49 .22 -.49 .22 -.49C.19 -.5 .17 -.53 .17 -.56C.18 -.65 .2 -1.61 .2 -1.69C.2 -1.73 .16 -1.76 .12 -1.76C.07 -1.76 0 -1.72 0 -1.64C0 -1.64 .02 .64 .05 .68ZM.19 .32C.19 .32 .18 .08 .18 -.08C.18 -.14 .18 -.19 .18 -.2C.2 -.25 .3 -.34 .36 -.37C.4 -.39 .43 -.4 .46 -.4C.5 -.4 .54 -.38 .56 -.36C.6 -.31 .63 -.24 .63 -.17C.63 -.1 .61 -.01 .56 .07C.51 .17 .39 .3 .27 .37C.26 .38 .24 .38 .23 .38C.2 .38 .19 .34 .19 .32Z"};
+const SHARP_ORDER=[3,0,4,1,5,2,6];   // F C G D A E B（DIA_LETTERの添字）
+const FLAT_ORDER =[6,2,5,1,4,0,3];   // B E A D G C F
+const SIG_DIA={
+  treble:{ "#":[38,35,39,36,33,37,34], "b":[34,37,33,36,32,35,31] },
+  bass  :{ "#":[24,21,25,22,19,23,20], "b":[20,23,19,22,18,21,17] }
+};
+const KEY_SLOTS=[                     // 五度圏。上から時計回りに♯が増える
+  [{n:"ハ長調",  t:"C", a:0,s:"#"}],
+  [{n:"ト長調",  t:"G", a:1,s:"#"}],
+  [{n:"ニ長調",  t:"D", a:2,s:"#"}],
+  [{n:"イ長調",  t:"A", a:3,s:"#"}],
+  [{n:"ホ長調",  t:"E", a:4,s:"#"}],
+  [{n:"ロ長調",  t:"B", a:5,s:"#"}],
+  [{n:"嬰ヘ長調",t:"F♯",a:6,s:"#"},{n:"変ト長調",t:"G♭",a:6,s:"b"}],  // 同じ鍵盤の2択
+  [{n:"変ニ長調",t:"D♭",a:5,s:"b"}],
+  [{n:"変イ長調",t:"A♭",a:4,s:"b"}],
+  [{n:"変ホ長調",t:"E♭",a:3,s:"b"}],
+  [{n:"変ロ長調",t:"B♭",a:2,s:"b"}],
+  [{n:"ヘ長調",  t:"F", a:1,s:"b"}],
+];
+let keySlot=0, keySub=0;
+const curKey=()=>KEY_SLOTS[keySlot][Math.min(keySub,KEY_SLOTS[keySlot].length-1)];
+function keyAlters(k){
+  const a=[0,0,0,0,0,0,0], ord=k.s==="#"?SHARP_ORDER:FLAT_ORDER;
+  for(let i=0;i<k.a;i++) a[ord[i]] = k.s==="#" ? 1 : -1;
+  return a;
+}
+/* 調号を使うのは「画面の鍵盤」で「ランダム出題」のときだけ */
+const keyActive=()=> quizMode==="random" && method==="piano";
+const activeAlters=()=> keyActive() ? keyAlters(curKey()) : [0,0,0,0,0,0,0];
+
+// 記号×範囲ごとの出題プール
 const RANGE_MIDI={
   treble:{narrow:[60,72], wide:[60,84]},   // C4–C5 / C4–C6
   bass:  {narrow:[48,60], wide:[36,60]},   // C3–C4 / C2–C4
 };
 function naturals(lo,hi){ const a=[]; for(let m=lo;m<=hi;m++) if(isNatural(m)) a.push(m); return a; }
+/* 音域(MIDI)の中に入る「そのスケールの音」を、五線上の位置ごとに拾う。
+   ハ長調（変化なし）のときは白鍵の一覧と完全に一致する。 */
+function scaleNotes(lo,hi,alters){
+  const out=[];
+  for(let dia=0;dia<84;dia++){
+    const li=((dia%7)+7)%7, alter=alters[li], m=diaMidi(dia,alter);
+    if(m>=lo && m<=hi) out.push({dia,alter,midi:m});
+  }
+  return out;
+}
 
 /* ---------- 曲データ（songs.js）の解釈 ----------
    "C C G G | A A G-" のような文字列を音符の並びに変換する。
@@ -350,13 +424,28 @@ function drawStaff(clef){
   c.setAttribute("d",CLEF_PATH[clef]); c.setAttribute("fill",INK);
   c.setAttribute("transform",`translate(${X_LEFT+CLEF_DX[clef]},${yForSteps(CLEF_REF[clef])}) scale(${LINE_GAP})`);
   staff.appendChild(c);
+  drawKeySig(clef);
+}
+const SIG_X=X_LEFT+58;
+function drawKeySig(clef){
+  if(!keyActive()) return;
+  const k=curKey(); if(!k.a) return;
+  const list=SIG_DIA[clef][k.s], d=(k.s==="#"?ACC_PATH.sharp:ACC_PATH.flat), gap=(k.s==="#"?15:13);
+  for(let i=0;i<k.a;i++){
+    const p=document.createElementNS(NS,"path");
+    p.setAttribute("d",d); p.setAttribute("fill",INK);
+    p.setAttribute("transform",
+      `translate(${SIG_X+i*gap},${yForSteps(list[i]-CLEF_BOTTOM[clef])}) scale(${LINE_GAP})`);
+    staff.appendChild(p);
+  }
 }
 let noteG=null;
-function drawNote(m,clef,animate){
+function drawNote(o,animate){
+  const clef=o.clef;
   drawStaff(clef);
   const g=document.createElementNS(NS,"g"); g.setAttribute("class","note"); staff.appendChild(g);
   noteG=g;
-  const steps=midiInfo(m).diatonic - CLEF_BOTTOM[clef];
+  const steps=o.diatonic - CLEF_BOTTOM[clef];
   const y=yForSteps(steps);
   for(let sp=-2;sp>=steps;sp-=2) line(X_NOTE-LEDGER_HALF,yForSteps(sp),X_NOTE+LEDGER_HALF,yForSteps(sp),W_LEDGER,INK,g);
   for(let sp=10;sp<=steps;sp+=2) line(X_NOTE-LEDGER_HALF,yForSteps(sp),X_NOTE+LEDGER_HALF,yForSteps(sp),W_LEDGER,INK,g);
@@ -433,7 +522,8 @@ function buildPools(){
   if(quizMode==="song"){ buildSong(); return; }
   clefs.forEach(c=>{
     const [lo,hi]=RANGE_MIDI[c][rangeMode];
-    naturals(lo,hi).forEach(m=>combined.push({midi:m, clef:c, diatonic:midiInfo(m).diatonic}));
+    scaleNotes(lo,hi,activeAlters())
+      .forEach(n=>combined.push({midi:n.midi, clef:c, diatonic:n.dia, alter:n.alter}));
   });
 }
 
@@ -478,18 +568,18 @@ function newTarget(animate){
     target=seq[songPos];
     el("timerFill").style.transform="scaleX("+(songPos/seq.length)+")";
   } else target=pickTarget();
-  drawNote(target.midi,target.clef,animate);
+  drawNote(target,animate);
   el("clefCap").textContent=CLEF_NAME[target.clef];
   if(method==="mic") el("detected").textContent="—";
 }
 
 /* 正解した音の音名を、いま音符があった場所の横に一瞬出してからフェードさせる。
    譜面上の位置と音名が同じ場所で結びつくので、記憶に残りやすい。 */
-function flashName(m,clef){
-  const f=el("flash"), info=midiInfo(m);
-  f.textContent=info.letter+info.octave+"（"+info.solfege+"）";
+function flashName(o){
+  const f=el("flash"), nn=noteName(o.diatonic,o.alter||0);
+  f.textContent=nn.letter+"（"+nn.solfege+"）";
   const r=staff.getBoundingClientRect(), pr=el("paper").getBoundingClientRect(), k=r.width/440;
-  const y=yForSteps(info.diatonic-CLEF_BOTTOM[clef]);
+  const y=yForSteps(o.diatonic-CLEF_BOTTOM[o.clef]);
   f.style.left=(r.left-pr.left+(X_NOTE+20)*k)+"px";
   f.style.top =(r.top -pr.top +(y-9)*k)+"px";
   f.classList.add("show");
@@ -515,7 +605,7 @@ function correct(){
     songGaps.push(Date.now()-lastAnsT); lastAnsT=Date.now();
     songPos++;
   } else playChord(target.midi);
-  flashName(target.midi,target.clef);
+  flashName(target);
   noteHit(answerKey(target));
   score++; streak++; setStats();
   if(noteG) noteG.classList.add("out");
@@ -646,7 +736,7 @@ function labelOfKey(k){
   const [clef,kind,val]=k.split("|");
   const c=(clef==="treble"?"ト音":"ヘ音");
   if(kind==="n") return c+" "+PC_TO_SOLFEGE[+val];
-  const i=midiInfo(+val); return c+" "+i.solfege+i.octave;
+  const m=+val; return c+" "+CHROM_SOLFEGE[((m%12)+12)%12]+(Math.floor(m/12)-1);
 }
 function renderWeak(){
   const rows=Object.entries(miss).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,8);
@@ -761,19 +851,91 @@ function segHandler(segId,setter){
   });
 }
 /* 設定を変えたら、スタート前でも出題プール・山札・鍵盤を作り直して今の設定を反映する */
-function refreshSetup(){ buildPools(); if(method==="piano") buildPiano(); }
+function refreshSetup(){
+  buildPools();
+  if(method==="piano") buildPiano();
+  if(!running) drawStaff(clefMode==="bass"?"bass":"treble");   // 調号の変更を待機中も反映
+}
 segHandler("methodSeg",d=>{ method=d.m;
+  syncModeUI();
   el("namePanel").classList.toggle("hidden",method!=="name");
   el("pianoPanel").classList.toggle("hidden",method!=="piano");
   el("micPanel").classList.toggle("hidden",method!=="mic");
   updateHint(); refreshSetup();
 });
+/* ---------- 五度圏（人生ゲームのルーレット風に、中心の針で調を選ぶ） ---------- */
+const WC=115, WR=88;                       // 中心と、調名を並べる半径
+function svgEl(tag,at){ const e=document.createElementNS(NS,tag);
+  for(const k in at) e.setAttribute(k,at[k]); return e; }
+function buildWheel(){
+  const w=el("wheel"); w.innerHTML="";
+  w.appendChild(svgEl("circle",{cx:WC,cy:WC,r:WR+18,fill:"none",stroke:"rgba(255,255,255,.07)"}));
+  w.appendChild(svgEl("circle",{cx:WC,cy:WC,r:WR-34,fill:"none",stroke:"rgba(255,255,255,.07)"}));
+  KEY_SLOTS.forEach((slot,i)=>{
+    const ang=(-90+i*30)*Math.PI/180;
+    slot.forEach((k,j)=>{
+      // 6時の2択は左右に並べると隣の調とぶつかるので、中心から見て内側と外側に分ける
+      const rr = slot.length>1 ? (j? WR-22 : WR+20) : WR;
+      const x=WC+Math.cos(ang)*rr, y=WC+Math.sin(ang)*rr;
+      const t=svgEl("text",{x,y:y-3,"text-anchor":"middle","dominant-baseline":"middle",
+                            class:"wk","data-slot":i,"data-sub":j});
+      t.textContent=k.t; w.appendChild(t);
+      const a=svgEl("text",{x,y:y+9,"text-anchor":"middle","dominant-baseline":"middle",
+                            class:"wa","data-slot":i,"data-sub":j});
+      a.textContent = k.a ? (k.s==="#"?"♯":"♭")+k.a : "—"; w.appendChild(a);
+    });
+  });
+  const n=svgEl("g",{id:"needle"});
+  n.appendChild(svgEl("line",{x1:WC,y1:WC,x2:WC,y2:WC-(WR-40),stroke:"var(--accent)",
+                              "stroke-width":2.6,"stroke-linecap":"round"}));
+  n.appendChild(svgEl("circle",{cx:WC,cy:WC-(WR-40),r:3.6,fill:"var(--accent)"}));
+  n.setAttribute("style","transition:transform .42s cubic-bezier(.3,1.3,.5,1)");
+  w.appendChild(n);
+  w.appendChild(svgEl("circle",{cx:WC,cy:WC,r:6.5,fill:"var(--accent)"}));
+  w.appendChild(svgEl("circle",{cx:WC,cy:WC,r:2.6,fill:"var(--panel)"}));
+  syncWheel();
+}
+function syncWheel(){
+  const n=document.getElementById("needle");
+  if(n) n.setAttribute("transform",`rotate(${keySlot*30} ${WC} ${WC})`);
+  const sub=Math.min(keySub,KEY_SLOTS[keySlot].length-1);
+  [...el("wheel").querySelectorAll(".wk,.wa")].forEach(t=>
+    t.classList.toggle("sel", +t.dataset.slot===keySlot && +t.dataset.sub===sub));
+  const k=curKey(), alt=keyAlters(k);
+  const ch=alt.map((a,i)=>a? DIA_SOLFEGE[i]+(a>0?"♯":"♭") : null).filter(Boolean);
+  el("keyCap").innerHTML = k.n + (k.a ? "　<span>"+(k.s==="#"?"♯":"♭")+k.a+"："+ch.join("・")+"</span>"
+                                      : "　<span>調号なし</span>");
+}
+function pickSlotFromPoint(ev){
+  const r=el("wheel").getBoundingClientRect();
+  const x=(ev.clientX-r.left)/r.width*230-WC, y=(ev.clientY-r.top)/r.width*230-WC;
+  if(Math.hypot(x,y)<14) return false;            // 中心付近は無視
+  let a=Math.atan2(y,x)*180/Math.PI+90; if(a<0) a+=360;
+  const slot=Math.round(a/30)%12;
+  if(slot!==keySlot){ keySlot=slot; if(KEY_SLOTS[slot].length===1) keySub=0; return true; }
+  return false;
+}
+(function wheelInput(){
+  const w=el("wheel"); let dragging=false;
+  w.addEventListener("pointerdown",e=>{
+    const t=e.target.closest(".wk,.wa");
+    if(t){ keySlot=+t.dataset.slot; keySub=+t.dataset.sub;
+           if(running) endGame(); syncWheel(); refreshSetup(); return; }
+    dragging=true; if(w.setPointerCapture) w.setPointerCapture(e.pointerId);
+    if(pickSlotFromPoint(e)){ if(running) endGame(); syncWheel(); refreshSetup(); }
+  });
+  w.addEventListener("pointermove",e=>{ if(!dragging) return;
+    if(pickSlotFromPoint(e)){ if(running) endGame(); syncWheel(); refreshSetup(); } });
+  ["pointerup","pointercancel"].forEach(ev=>w.addEventListener(ev,()=>{dragging=false;}));
+})();
+
 function syncModeUI(){
   const song = quizMode==="song";
   el("songField").classList.toggle("hidden",!song);
   el("rangeField").classList.toggle("hidden",song);
   el("timeField").classList.toggle("hidden",song);
   el("shuffleField").classList.toggle("hidden",!song);
+  el("keyField").classList.toggle("hidden",!keyActive());
 }
 segHandler("modeSeg",d=>{ quizMode=d.q; syncModeUI(); updateHint(); refreshSetup(); });
 segHandler("octSeg",d=>{ octVary=(d.o==="vary"); refreshSetup(); });
@@ -787,7 +949,8 @@ el("vol").addEventListener("input",e=>setVol(parseInt(e.target.value,10)));
 function updateHint(){
   const map={
     name:"表示された音符の<b>音名</b>を選びます。オクターブは問いません。読む速度を上げる練習に向いています。",
-    piano:"表示された音符と<b>同じ高さの鍵盤</b>を選びます（オクターブも一致させてください）。Cの鍵盤に音名を表示しています。",
+    piano:"表示された音符と<b>同じ高さの鍵盤</b>を選びます（オクターブも一致させてください）。Cの鍵盤に音名を表示しています。"
+      +"<br>このモードでは<b>調（スケール）</b>を選べます。調号がつくと、たとえばト長調では譜面のファは<b>ファ♯の黒鍵</b>になります。",
     mic:"表示された音符を実際の楽器で演奏し、マイクで判定します。※<b>https</b> または <b>http://localhost</b> で開いた場合のみ利用できます。"
   };
   const song="<p><b>曲モード</b>：メロディの順に音符が出ます。正解するとその音が鳴るので、"
@@ -812,7 +975,7 @@ el("vol").value=sfxVol; setVol(sfxVol);
     o.textContent=s.name+"　"+"★".repeat(Math.max(1,Math.min(3,s.level||1))); sel.appendChild(o); });
   sel.value=0;
 })();
-syncModeUI();
+buildWheel(); syncModeUI();
 drawStaff("treble"); updateHint(); setStats(); renderWeak();
 </script>
 </body>
