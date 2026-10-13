@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>線上の音符クイズ</title>
+<style>
+:root{
+  --ink:#1c1e26; --paper:#fffdf7; --bg:#f3efe6; --line:#ddd6c6;
+  --accent:#2f6f4e; --accent2:#c0392b; --dim:#6d675c;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+  -webkit-text-size-adjust:100%}
+.wrap{max-width:620px;margin:0 auto;padding:14px 14px 40px}
+h1{font-size:17px;margin:4px 0 2px;letter-spacing:.04em}
+.sub{font-size:12px;color:var(--dim);margin:0 0 12px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.row+.row{margin-top:8px}
+.lab{font-size:11px;color:var(--dim);width:4.6em;flex:none}
+button{font:inherit;color:inherit;background:var(--paper);border:1px solid var(--line);
+  border-radius:9px;padding:7px 11px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:active{transform:translateY(1px)}
+.chip{font-size:12px;padding:5px 10px;border-radius:999px}
+.chip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+#paper{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:8px 0;margin-bottom:10px;
+  display:flex;justify-content:center}
+#staff{display:block;width:100%;height:auto;max-height:min(460px,56vh)}
+#mark{transition:opacity .18s ease}
+#mark.in{opacity:0}
+
+/* ---- 鍵盤 ---- */
+.kbwrap{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
+  background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:8px}
+.kb{position:relative;height:118px;margin:0 auto}
+.kb .w,.kb .b{position:absolute;top:0;border-radius:0 0 5px 5px;cursor:pointer;
+  display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px;
+  font-size:9px;letter-spacing:.02em;user-select:none}
+.kb .w{height:118px;background:#fffefb;border:1px solid #c9c2b2;border-top:none;color:var(--dim)}
+.kb .b{height:72px;background:#2b2d35;border:1px solid #16171c;border-top:none;z-index:2;
+  pointer-events:none;color:#8d8d96}
+.kb .w:active{background:#efe9da}
+.kb .w.ok{background:var(--accent);border-color:var(--accent);color:#fff}
+.kb .w.ng{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.kb .w.c{color:#8a8372;font-weight:700}
+.msg{min-height:1.5em;font-size:13px;margin:8px 2px 0;font-weight:600}
+.msg.ok{color:var(--accent)} .msg.ng{color:var(--accent2)}
+.bar{display:flex;gap:14px;align-items:baseline;font-size:12px;color:var(--dim);margin:10px 2px 0}
+.bar b{font-size:19px;color:var(--ink);font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:4px 2px;text-align:center;border-bottom:1px solid var(--line)}
+th{color:var(--dim);font-weight:400}
+td.w{color:var(--accent2);font-weight:700}
+.hint{font-size:13px;line-height:1.9}
+.hint .seq{font-size:16px;letter-spacing:.14em}
+.hint em{font-style:normal;color:var(--accent2);font-weight:700}
+details summary{font-size:12px;color:var(--dim);cursor:pointer}
+.big{width:100%;padding:12px;font-size:15px;font-weight:700;border-radius:10px;
+  background:var(--ink);color:var(--paper);border-color:var(--ink)}
+input[type=range]{flex:1;min-width:90px;accent-color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>線上の音符クイズ</h1>
+<p class="sub">大譜表（ト音＋ヘ音）の<strong>赤く光った線の音</strong>を、鍵盤で答える練習。</p>
+
+<div class="card">
+  <div class="row"><span class="lab">出題</span>
+    <button class="chip" data-g="clef" data-v="treble">ト音側</button>
+    <button class="chip" data-g="clef" data-v="bass">ヘ音側</button>
+    <button class="chip" data-g="clef" data-v="both">両方</button>
+  </div>
+  <div class="row"><span class="lab">加線</span>
+    <button class="chip" data-g="led" data-v="0">なし</button>
+    <button class="chip" data-g="led" data-v="1">外側1本</button>
+    <button class="chip" data-g="led" data-v="2">外側2本</button>
+    <button class="chip" data-g="led" data-v="3">外側3本</button>
+    <button class="chip" data-g="led" data-v="4">外側4本</button>
+  </div>
+  <div class="row"><span class="lab">時間</span>
+    <button class="chip" data-g="time" data-v="60">60秒</button>
+    <button class="chip" data-g="time" data-v="90">90秒</button>
+    <button class="chip" data-g="time" data-v="0">無制限</button>
+  </div>
+  <div class="row"><span class="lab">その他</span>
+    <button class="chip" id="t-hint">ヒント表示</button>
+    <button class="chip" id="t-names">鍵盤に音名</button>
+    <button class="chip" id="t-weak">苦手を多めに</button>
+  </div>
+  <div class="row"><span class="lab">音量</span>
+    <input type="range" id="vol" min="0" max="100" step="5">
+    <span id="volVal" style="font-size:12px;color:var(--dim);width:3em;text-align:right"></span>
+  </div>
+</div>
+
+<div id="paper"><svg id="staff" viewBox="0 0 440 340" aria-label="大譜表"></svg></div>
+<div class="kbwrap" id="kbwrap"><div class="kb" id="kb"></div></div>
+<div class="msg" id="msg"></div>
+<div class="bar">
+  <span>せいかい <b id="score">0</b></span>
+  <span>れんぞく <b id="streak">0</b></span>
+  <span>のこり <b id="time">—</b></span>
+</div>
+<div class="row" style="margin-top:12px"><button class="big" id="start">スタート</button></div>
+
+<div class="card" id="hintcard" hidden>
+  <div class="hint" id="hinttext"></div>
+</div>
+
+<div class="card">
+  <details id="statbox"><summary>音ごとの成績（ブラウザに保存）</summary>
+    <div id="stats" style="margin-top:8px"></div>
+    <button class="chip" id="reset" style="margin-top:8px">成績をリセット</button>
+  </details>
+</div>
+
+<p class="sub" style="margin-top:18px">
+音部記号の字形は Bravura（SIL Open Font License 1.1 / Steinberg Media Technologies GmbH）から取り出したもの。詳細は同じフォルダの OFL.txt。
+</p>
+</div>
+
+<script>
+const CLEF_PATH={
+ treble:"M1.504 -1.66C1.496 -1.708 1.504 -1.712 1.528 -1.736C1.592 -1.796 1.676 -1.88 1.752 -1.964C2.088 -2.332 2.288 -2.808 2.288 -3.26C2.288 -3.608 2.192 -3.952 2.028 -4.192C1.968 -4.28 1.864 -4.392 1.82 -4.392C1.764 -4.392 1.64 -4.288 1.56 -4.2C1.264 -3.872 1.168 -3.372 1.168 -2.956C1.168 -2.724 1.196 -2.464 1.224 -2.3C1.232 -2.252 1.236 -2.244 1.188 -2.204C.932 -1.992 .656 -1.748 .448 -1.492C.172 -1.148 0 -.776 0 -.348C0 .348 .476 1.008 1.456 1.008C1.548 1.008 1.652 1 1.732 .984C1.776 .976 1.784 .972 1.792 1.02C1.84 1.288 1.9 1.636 1.9 1.824C1.9 2.416 1.5 2.488 1.264 2.488C1.048 2.488 .944 2.424 .944 2.372C.944 2.344 .98 2.332 1.072 2.304C1.196 2.268 1.34 2.16 1.34 1.928C1.34 1.708 1.2 1.52 .956 1.52C.688 1.52 .528 1.732 .528 1.98C.528 2.24 .684 2.632 1.288 2.632C1.556 2.632 2.076 2.512 2.076 1.832C2.076 1.604 2.004 1.224 1.96 .976C1.952 .928 1.956 .932 2.012 .908C2.416 .748 2.684 .408 2.684 -.044C2.684 -.556 2.308 -1.008 1.72 -1.008C1.616 -1.008 1.616 -1.008 1.604 -1.08ZM1.88 -3.772C2.012 -3.772 2.12 -3.664 2.12 -3.444C2.12 -3.168 1.988 -2.912 1.676 -2.6C1.612 -2.536 1.516 -2.444 1.424 -2.364C1.396 -2.34 1.38 -2.344 1.372 -2.396C1.356 -2.5 1.348 -2.636 1.348 -2.764C1.348 -3.388 1.636 -3.772 1.88 -3.772ZM1.444 -1.048C1.456 -.972 1.456 -.976 1.384 -.952C1.032 -.832 .804 -.516 .804 -.176C.804 .184 .992 .44 1.264 .532C1.296 .544 1.344 .556 1.372 .556C1.404 .556 1.42 .536 1.42 .512C1.42 .484 1.388 .472 1.36 .46C1.192 .388 1.072 .216 1.072 .032C1.072 -.196 1.228 -.368 1.472 -.436C1.536 -.452 1.544 -.448 1.552 -.404L1.752 .788C1.76 .832 1.756 .832 1.696 .844C1.632 .856 1.552 .864 1.472 .864C.772 .864 .32 .476 .32 -.08C.32 -.316 .36 -.632 .692 -1.008C.932 -1.276 1.116 -1.424 1.304 -1.576C1.344 -1.608 1.352 -1.604 1.36 -1.56ZM1.72 -.412C1.712 -.46 1.716 -.472 1.764 -.468C2.088 -.44 2.356 -.168 2.356 .184C2.356 .436 2.204 .64 1.98 .752C1.932 .776 1.924 .776 1.916 .728Z",
+ bass:"M1.008 -1.048C.312 -1.048 0 -.54 0 -.156C0 .164 .168 .44 .492 .44C.744 .44 .916 .264 .916 .016C.916 -.24 .728 -.4 .532 -.4C.424 -.4 .384 -.372 .332 -.372C.28 -.372 .268 -.404 .268 -.444C.268 -.604 .508 -.896 .916 -.896C1.34 -.896 1.524 -.48 1.524 .148C1.524 .56 1.436 1.04 1.188 1.424C.948 1.796 .536 2.136 .04 2.42C.004 2.44 -.02 2.46 -.02 2.492C-.02 2.516 -.004 2.54 .032 2.54C.052 2.54 .076 2.532 .1 2.52C.632 2.26 1.144 1.956 1.568 1.5C1.916 1.124 2.124 .636 2.124 .112C2.124 -.584 1.7 -1.048 1.008 -1.048ZM2.516 -.72C2.392 -.72 2.296 -.624 2.296 -.5C2.296 -.376 2.392 -.28 2.516 -.28C2.64 -.28 2.736 -.376 2.736 -.5C2.736 -.624 2.64 -.72 2.516 -.72ZM2.52 .284C2.396 .284 2.304 .376 2.304 .5C2.304 .624 2.396 .716 2.52 .716C2.644 .716 2.736 .624 2.736 .5C2.736 .376 2.644 .284 2.52 .284Z"};
+
+/* ---------- 音の表現 ----------
+   dia（ダイアトニック番号）= オクターブ*7 + 音名の位置。C=0,D=1,...,B=6
+   大譜表は「真ん中のド(C4=dia 28)」を軸に上下対称に置けるので、高さは dia だけで決まる。 */
+const LETTERS=["C","D","E","F","G","A","B"];
+const SOLFA  =["ド","レ","ミ","ファ","ソ","ラ","シ"];
+const SEMI   =[0,2,4,5,7,9,11];
+const MIDC=4*7+0;                 // C4 = 28
+const TOP_LINES =[30,32,34,36,38];   // ト音の五線（E4 G4 B4 D5 F5）
+const BOT_LINES =[18,20,22,24,26];   // ヘ音の五線（G2 B2 D3 F3 A3）
+const CLEF_DIA  ={treble:32 /*G4線*/, bass:24 /*F3線*/};
+const CLEF_DX   ={treble:10, bass:10};
+const CLEF_LABEL={treble:"ト音記号", bass:"ヘ音記号"};
+const li=d=>((d%7)+7)%7;
+const info=d=>({dia:d, letter:LETTERS[li(d)], solfa:SOLFA[li(d)],
+                octave:Math.floor(d/7), midi:(Math.floor(d/7)+1)*12+SEMI[li(d)]});
+const nameOf=d=>{const i=info(d); return i.solfa+"（"+i.letter+i.octave+"）";};
+const midiToDia=m=>{const pc=((m%12)+12)%12, k=SEMI.indexOf(pc);
+  return k<0?null:(Math.floor(m/12)-1)*7+k;};
+
+/* 出題の候補。真ん中のドは両方の譜表に属するので、どちらを選んでも入れる。 */
+function pool(){
+  const out=[];
+  if(clefMode!=="bass"){
+    for(const d of TOP_LINES) out.push({dia:d, side:"treble"});
+    for(let k=1;k<=ledger;k++) out.push({dia:38+2*k, side:"treble"});
+  }
+  if(clefMode!=="treble"){
+    for(const d of BOT_LINES) out.push({dia:d, side:"bass"});
+    for(let k=1;k<=ledger;k++) out.push({dia:18-2*k, side:"bass"});
+  }
+  out.push({dia:MIDC, side:"mid"});
+  return out;
+}
+
+/* ---------- 大譜表の描画（彫版の標準比率：線間=1として五線0.13 / 加線0.16） ---------- */
+const NS="http://www.w3.org/2000/svg", staff=document.getElementById("staff");
+const INK="#1c1e26", RED="#d3342a", PALE="#f0c9c4";
+const GAP=16, X_LEFT=44, X_RIGHT=420, X_MARK=252, Y_MIDC=170;
+/* 2つの五線は、実際の楽譜と同じく線間ぴったりより少し離して置く（1枚の10線譜に見えないように） */
+const SPLIT=GAP*1.5;
+const W_STAFF=GAP*0.13, W_LEDGER=GAP*0.16, LEDGER_HALF=GAP*1.0, MARK_HALF=GAP*1.5;
+/* 真ん中のドを中心に、1音（3度）ごとに線間の半分ずつ動く。
+   ト音側は SPLIT/2 だけ上へ、ヘ音側は下へずらす（真ん中のドは2つの五線のちょうど中間に残る）。*/
+const yBase=d=>Y_MIDC-(d-MIDC)*(GAP/2);
+const yFor=(d,side)=> side==="mid" ? Y_MIDC
+                    : yBase(d) + (side==="bass" ? SPLIT/2 : -SPLIT/2);
+function line(x1,y1,x2,y2,w=W_STAFF,color=INK,parent=staff){
+  const l=document.createElementNS(NS,"line");
+  l.setAttribute("x1",x1);l.setAttribute("y1",y1);l.setAttribute("x2",x2);l.setAttribute("y2",y2);
+  l.setAttribute("stroke",color);l.setAttribute("stroke-width",w);
+  l.setAttribute("stroke-linecap","round");parent.appendChild(l);
+}
+function drawGrand(){
+  while(staff.firstChild) staff.removeChild(staff.firstChild);
+  const pad=26, top=yFor(38+2*ledger,"treble")-pad, h=yFor(18-2*ledger,"bass")+pad-top;
+  staff.setAttribute("viewBox","0 "+top+" 440 "+h);
+  for(const d of TOP_LINES) line(X_LEFT,yFor(d,"treble"),X_RIGHT,yFor(d,"treble"));
+  for(const d of BOT_LINES) line(X_LEFT,yFor(d,"bass"),  X_RIGHT,yFor(d,"bass"));
+  /* 2つの五線をつなぐ縦線（大譜表の左右の端） */
+  line(X_LEFT, yFor(38,"treble"),X_LEFT, yFor(18,"bass"),W_STAFF*1.6);
+  line(X_RIGHT,yFor(38,"treble"),X_RIGHT,yFor(18,"bass"),W_STAFF*1.6);
+  for(const c of ["treble","bass"]){
+    const p=document.createElementNS(NS,"path");
+    p.setAttribute("d",CLEF_PATH[c]); p.setAttribute("fill",INK);
+    p.setAttribute("transform",`translate(${X_LEFT+CLEF_DX[c]},${yFor(CLEF_DIA[c],c)}) scale(${GAP})`);
+    staff.appendChild(p);
+  }
+}
+/* 出題＝音符ではなく「その線」を赤くする。
+   五線の中は線そのものを赤で引き直し、外側は加線を立てて（途中の加線は黒）一番外を赤にする。 */
+function drawMark(q,animate){
+  drawGrand();
+  const g=document.createElementNS(NS,"g"); g.setAttribute("id","mark"); staff.appendChild(g);
+  const d=q.dia, y=yFor(d,q.side);
+  if(q.side==="treble" && d>38) for(let p=40;p<d;p+=2) ledgerLine(p,"treble",g);
+  if(q.side==="bass"   && d<18) for(let p=16;p>d;p-=2) ledgerLine(p,"bass",g);
+  if(q.side==="mid" || d>38 || d<18){
+    line(X_MARK-MARK_HALF,y,X_MARK+MARK_HALF,y,GAP*0.30,RED,g);
+  }else{
+    line(X_LEFT,y,X_RIGHT,y,W_STAFF,PALE,g);                   // 同じ線をうっすら全体に
+    line(X_MARK-MARK_HALF,y,X_MARK+MARK_HALF,y,GAP*0.30,RED,g);
+  }
+  if(animate){ g.classList.add("in");
+    requestAnimationFrame(()=>requestAnimationFrame(()=>g.classList.remove("in"))); }
+}
+function ledgerLine(d,side,g){
+  const y=yFor(d,side);
+  line(X_MARK-LEDGER_HALF,y,X_MARK+LEDGER_HALF,y,W_LEDGER,INK,g);
+}
+
+/* ---------- 状態 ---------- */
+let clefMode="both", ledger=4, limit=60;
+let showHint=true, showNames=false, weakFocus=true;
+let running=false, score=0, streak=0, t0=0, timer=null, locked=false;
+let bag=[], cur=null, prev=null;
+
+/* ---------- 成績（localStorage） ---------- */
+const SKEY="lineQuiz.stat.v3";
+let stat={};
+try{ stat=JSON.parse(localStorage.getItem(SKEY)||"{}"); }catch(e){ stat={}; }
+const kOf=q=>String(q.dia);
+function saveStat(){ try{ localStorage.setItem(SKEY,JSON.stringify(stat)); }catch(e){} }
+function rec(q,ok){
+  const k=kOf(q), s=stat[k]||(stat[k]={o:0,x:0});
+  ok?s.o++:s.x++; saveStat(); renderStats();
+}
+function weakScore(q){ const s=stat[kOf(q)]; if(!s) return 0; return s.x*2-s.o; }
+
+/* ---------- 出題（シャッフルした山札。苦手は1周に多めに混ぜる） ---------- */
+function refill(){
+  const p=pool();
+  bag=p.slice();
+  if(weakFocus){
+    const extra=p.filter(q=>weakScore(q)>0).sort((a,b)=>weakScore(b)-weakScore(a)).slice(0,3);
+    bag=bag.concat(extra);
+  }
+  for(let i=bag.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [bag[i],bag[j]]=[bag[j],bag[i]]; }
+}
+function next(){
+  if(!bag.length) refill();
+  let idx=0;
+  if(prev && bag.length>1 && kOf(bag[0])===kOf(prev)) idx=1;   // 同じ線の連続を避ける
+  cur=bag.splice(idx,1)[0];
+  prev=cur;
+  drawMark(cur,true);
+  locked=false;
+  document.querySelectorAll("#kb .w").forEach(b=>b.classList.remove("ok","ng"));
+  renderHint();
+}
+
+/* ---------- 鍵盤 ---------- */
+const kb=document.getElementById("kb"), kbwrap=document.getElementById("kbwrap");
+const WKEY=34, BKEY=16;
+const BLACK_AFTER={0:1,2:1,5:1,7:1,9:1};     // C D F G A の右上に黒鍵
+let kbLo=0, kbHi=0;
+function buildKeyboard(){
+  const ms=pool().map(q=>info(q.dia).midi);
+  kbLo=Math.min.apply(null,ms); kbHi=Math.max.apply(null,ms);
+  kbLo=kbLo-((kbLo%12)+12)%12;                 // 下はCまで、上はBまで広げて鍵盤らしく
+  kbHi=kbHi+(11-((kbHi%12)+12)%12);
+  kb.innerHTML="";
+  let x=0;
+  for(let m=kbLo;m<=kbHi;m++){
+    const pc=((m%12)+12)%12, oct=Math.floor(m/12)-1, isBlack=SEMI.indexOf(pc)<0;
+    if(!isBlack){
+      const d=document.createElement("div");
+      d.className="w"+(pc===0?" c":""); d.style.left=x+"px"; d.style.width=WKEY+"px";
+      d.dataset.midi=m;
+      d.textContent = showNames ? SOLFA[SEMI.indexOf(pc)]+oct : (pc===0?"C"+oct:"");
+      d.onclick=()=>answer(m);
+      kb.appendChild(d);
+      if(BLACK_AFTER[pc] && m<kbHi){
+        const b=document.createElement("div");
+        b.className="b"; b.style.left=(x+WKEY-BKEY/2)+"px"; b.style.width=BKEY+"px";
+        kb.appendChild(b);
+      }
+      x+=WKEY;
+    }
+  }
+  kb.style.width=x+"px";
+  centerKeyboard();
+}
+function centerKeyboard(){                     // 最初はだいたい真ん中（出題範囲の中央）を見せる
+  const mid=(kbLo+kbHi)/2;
+  let n=0; for(let m=kbLo;m<mid;m++) if(SEMI.indexOf(((m%12)+12)%12)>=0) n++;
+  kbwrap.scrollLeft=Math.max(0,n*WKEY-kbwrap.clientWidth/2);
+}
+function keyEl(midi){ return kb.querySelector('.w[data-midi="'+midi+'"]'); }
+
+/* ---------- 回答 ---------- */
+const msg=document.getElementById("msg");
+function answer(midi){
+  if(!running||locked||!cur) return;
+  const right=info(cur.dia).midi;
+  if(midi===right){
+    locked=true; score++; streak++;
+    const e=keyEl(midi); if(e) e.classList.add("ok");
+    msg.className="msg ok"; msg.textContent="○ "+nameOf(cur.dia);
+    rec(cur,true); playChord(right);
+    update(); setTimeout(()=>{ if(running) next(); },620);
+  }else{
+    streak=0; locked=true;
+    const e=keyEl(midi), r=keyEl(right);
+    if(e) e.classList.add("ng"); if(r) r.classList.add("ok");
+    const d=midiToDia(midi);
+    msg.className="msg ng";
+    msg.textContent="× こたえは "+nameOf(cur.dia)+(d!==null?"（押したのは "+nameOf(d)+"）":"");
+    rec(cur,false); playMiss(right);
+    update(); setTimeout(()=>{ if(running) next(); },1400);
+  }
+}
+function update(){
+  document.getElementById("score").textContent=score;
+  document.getElementById("streak").textContent=streak;
+}
+
+/* ---------- ヒント ---------- */
+function renderHint(){
+  const card=document.getElementById("hintcard");
+  card.hidden=!showHint;
+  if(!showHint) return;
+  let h="";
+  for(const [c,lines] of [["treble",TOP_LINES],["bass",BOT_LINES]]){
+    const names=lines.map(d=>{
+      const n=info(d).solfa, hit=cur&&cur.dia===d;
+      return hit?"<em>"+n+"</em>":n;
+    });
+    h+="<div><strong>"+CLEF_LABEL[c]+"</strong>の線（下から）<br>"+
+       "<span class=\"seq\">"+names.join(" ")+"</span></div>";
+  }
+  h+="<div style=\"color:var(--dim);font-size:12px;margin-top:6px\">"+
+     "2つの五線のまん中の加線は<strong"+(cur&&cur.dia===MIDC?" style=\"color:var(--accent2)\"":"")+
+     ">真ん中のド（C4）</strong>。"+
+     (ledger>0?"外側の加線は五線の続きで、1本増えるごとに1つとなりの音（3度上／下）になる。":"")+"</div>";
+  document.getElementById("hinttext").innerHTML=h;
+}
+
+/* ---------- 成績表 ---------- */
+function renderStats(){
+  const box=document.getElementById("stats");
+  const rows=[];
+  for(const k in stat){
+    const st=stat[k], n=st.o+st.x; if(!n) continue;
+    const d=Number(k);
+    rows.push({n, rate:Math.round(st.o/n*100),
+      label:(d>38?"ト音 上加線":d>=30?"ト音":d===MIDC?"まん中":d>=18?"ヘ音":"ヘ音 下加線")+" "+nameOf(d)});
+  }
+  if(!rows.length){ box.innerHTML="<p class=\"sub\">まだ記録がありません。</p>"; return; }
+  rows.sort((a,b)=>a.rate-b.rate);
+  box.innerHTML="<table><tr><th>音</th><th>出題</th><th>正答率</th></tr>"+
+    rows.map(r=>"<tr><td>"+r.label+"</td><td>"+r.n+"</td><td class=\""+(r.rate<70?"w":"")+"\">"+r.rate+"%</td></tr>").join("")+
+    "</table>";
+}
+
+/* ---------- 音（Karplus-Strong による撥弦の合成） ----------
+   弦をはじいた音は「短いノイズを、弦を1往復する時間だけ遅らせて平均しながら足し戻す」と作れる。
+   平均のぶんだけ高い倍音から先に減るので、ハープや撥弦楽器に近い減衰になる。 */
+let sfx=null, sfxOut=null, sfxVol=45;
+try{ const v=localStorage.getItem("lineQuiz.vol.v1"); if(v!==null) sfxVol=parseInt(v,10)||0; }catch(e){}
+function ensureSfx(){
+  if(sfx) return sfx;
+  try{
+    sfx=new (window.AudioContext||window.webkitAudioContext)();
+    const lp=sfx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=5200; lp.Q.value=0.4;
+    const hp=sfx.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=70;
+    sfxOut=sfx.createGain(); sfxOut.gain.value=1;
+    sfxOut.connect(lp); lp.connect(hp); hp.connect(sfx.destination);
+  }catch(e){ sfx=null; }
+  return sfx;
+}
+const midiFreq=m=>440*Math.pow(2,(m-69)/12);
+function pluckBuffer(ctx,freq,dur,damp){
+  const sr=ctx.sampleRate, len=Math.ceil(sr*dur);
+  /* 遅延の長さを整数に丸めると高い音ほど音程がずれるので、小数ぶんは2点補間で埋める。
+     平均フィルタ自体が0.5サンプル遅れるため、その分を引いた D を目標の遅延にする。 */
+  const D=Math.max(2.5, sr/freq-0.5), N=Math.floor(D), f=D-N;
+  const buf=ctx.createBuffer(1,len,sr), d=buf.getChannelData(0);
+  let last=0;                                   // 励振のノイズは鈍らせる（生のままだと硬い音になる）
+  for(let i=0;i<=N+1&&i<len;i++){ last=last*0.6+(Math.random()*2-1)*0.4; d[i]=last; }
+  for(let i=N+2;i<len;i++)
+    d[i]=damp*0.5*((1-f)*(d[i-N]+d[i-N-1]) + f*(d[i-N-1]+d[i-N-2]));
+  for(let i=0;i<len;i++) d[i]*=Math.pow(1-i/len,1.6);
+  return buf;
+}
+/* 正解した音をルートにした長三和音を、下から順にずらして鳴らす（ハープの分散和音） */
+function playChord(midi){
+  if(sfxVol<=0) return;
+  const ctx=ensureSfx(); if(!ctx) return;
+  if(ctx.state==="suspended") ctx.resume();
+  const voices = midi<52 ? [0,12,16,19] : [0,4,7,12];   // 低い音は開離配置にして濁らせない
+  const t0=ctx.currentTime+0.01, amp=(sfxVol/100)*0.42;
+  voices.forEach((iv,k)=>{
+    const src=ctx.createBufferSource();
+    src.buffer=pluckBuffer(ctx,midiFreq(midi+iv),1.7,0.9965);
+    const g=ctx.createGain(); g.gain.value=amp*(k===0?1:0.66);
+    src.connect(g); g.connect(sfxOut);
+    src.start(t0+k*0.038); src.stop(t0+k*0.038+1.75);   // 38msずつずらして分散和音にする
+  });
+}
+/* 不正解は、正解の音とその三全音（♭5）を短く2音だけ。一瞬で「違う」と分かる */
+function playMiss(midi){
+  if(sfxVol<=0) return;
+  const ctx=ensureSfx(); if(!ctx) return;
+  if(ctx.state==="suspended") ctx.resume();
+  const t0=ctx.currentTime+0.01;
+  [[0,0.28,0],[6,0.24,0.012]].forEach(([iv,amp,dt])=>{
+    const src=ctx.createBufferSource();
+    src.buffer=pluckBuffer(ctx,midiFreq(midi+iv),0.42,0.988);
+    const g=ctx.createGain(); g.gain.value=(sfxVol/100)*amp;
+    src.connect(g); g.connect(sfxOut);
+    src.start(t0+dt); src.stop(t0+dt+0.5);
+  });
+}
+const volEl=document.getElementById("vol"), volVal=document.getElementById("volVal");
+function setVol(v,save){
+  sfxVol=Math.max(0,Math.min(100,v|0));
+  volEl.value=sfxVol; volVal.textContent=sfxVol===0?"消音":sfxVol;
+  if(save){ try{ localStorage.setItem("lineQuiz.vol.v1",sfxVol); }catch(e){} }
+}
+volEl.oninput=()=>setVol(+volEl.value,true);
+
+/* ---------- タイマー ---------- */
+function tick(){
+  if(!limit){ document.getElementById("time").textContent="∞"; return; }
+  const left=Math.max(0,limit-(Date.now()-t0)/1000);
+  document.getElementById("time").textContent=Math.ceil(left);
+  if(left<=0) stop();
+}
+function start(){
+  ensureSfx();                                   // 最初のタップで音を使えるようにしておく
+  running=true; score=0; streak=0; prev=null; bag=[]; t0=Date.now();
+  update(); msg.textContent=""; msg.className="msg";
+  document.getElementById("start").textContent="やめる";
+  clearInterval(timer); timer=setInterval(tick,100); tick();
+  next();
+}
+function stop(){
+  running=false; clearInterval(timer); timer=null; locked=true;
+  document.getElementById("start").textContent="スタート";
+  document.getElementById("time").textContent="—";
+  msg.className="msg"; msg.textContent="おわり！ せいかい "+score+"問"+(limit?"（"+limit+"秒）":"");
+  document.getElementById("statbox").open=true;
+}
+document.getElementById("start").onclick=()=>running?stop():start();
+
+/* ---------- 設定UI ---------- */
+function paint(){
+  document.querySelectorAll("[data-g]").forEach(b=>{
+    const v={clef:clefMode,led:String(ledger),time:String(limit)}[b.dataset.g];
+    b.classList.toggle("on", b.dataset.v===v);
+  });
+  document.getElementById("t-hint").classList.toggle("on",showHint);
+  document.getElementById("t-names").classList.toggle("on",showNames);
+  document.getElementById("t-weak").classList.toggle("on",weakFocus);
+}
+document.querySelectorAll("[data-g]").forEach(b=>b.onclick=()=>{
+  const g=b.dataset.g, v=b.dataset.v;
+  if(g==="clef") clefMode=v; else if(g==="led") ledger=Number(v); else limit=Number(v);
+  bag=[]; prev=null; paint(); saveConf(); buildKeyboard();
+  if(running) next(); else { drawGrand(); renderHint(); }
+});
+document.getElementById("t-hint").onclick =()=>{ showHint=!showHint; paint(); renderHint(); saveConf(); };
+document.getElementById("t-names").onclick=()=>{ showNames=!showNames; paint(); saveConf();
+  const sl=kbwrap.scrollLeft; buildKeyboard(); kbwrap.scrollLeft=sl; };
+document.getElementById("t-weak").onclick =()=>{ weakFocus=!weakFocus; bag=[]; paint(); saveConf(); };
+document.getElementById("reset").onclick  =()=>{ stat={}; saveStat(); renderStats(); };
+
+const CKEY="lineQuiz.conf.v3";
+function saveConf(){ try{ localStorage.setItem(CKEY,
+  JSON.stringify({clefMode,ledger,limit,showHint,showNames,weakFocus})); }catch(e){} }
+try{ const c=JSON.parse(localStorage.getItem(CKEY)||"null");
+  if(c){ clefMode=c.clefMode||clefMode;
+    ledger=(typeof c.ledger==="number"?c.ledger:ledger);
+    limit=(c.limit===0?0:(c.limit||limit));
+    showHint=!!c.showHint; showNames=!!c.showNames; weakFocus=!!c.weakFocus; }
+}catch(e){}
+
+addEventListener("keydown",e=>{
+  if(e.key===" "||e.key==="Enter"){ e.preventDefault(); running?stop():start(); }
+});
+
+setVol(sfxVol,false); paint(); buildKeyboard(); drawGrand(); renderHint(); renderStats();
+</script>
+</body>
+</html>
