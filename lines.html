@@ -24,6 +24,7 @@ button{font:inherit;color:inherit;background:var(--paper);border:1px solid var(-
   border-radius:9px;padding:7px 11px;cursor:pointer;-webkit-tap-highlight-color:transparent}
 button:active{transform:translateY(1px)}
 .chip{font-size:12px;padding:5px 10px;border-radius:999px}
+button{touch-action:manipulation}
 .chip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 #paper{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:8px 0;margin-bottom:10px;
   display:flex;justify-content:center}
@@ -35,7 +36,7 @@ button:active{transform:translateY(1px)}
 .kbwrap{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
   background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:8px}
 .kb{position:relative;height:118px;margin:0 auto}
-.kb .w,.kb .b{position:absolute;top:0;border-radius:0 0 5px 5px;cursor:pointer;
+.kb .w,.kb .b{position:absolute;top:0;touch-action:manipulation;border-radius:0 0 5px 5px;cursor:pointer;
   display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px;
   font-size:9px;letter-spacing:.02em;user-select:none}
 .kb .w{height:118px;background:#fffefb;border:1px solid #c9c2b2;border-top:none;color:var(--dim)}
